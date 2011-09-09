@@ -227,52 +227,22 @@
                 (channel-try-get response-channel))
     (check-equal? (channel-try-get response-channel) #f))
   
-  ;; check for signal that stalls
+  ;; check for signal that stalls (should play brief burst of static)
+  (let ()
+    (define abort-box (box #f))
+    (define (signal t)
+      ;; sleep essentially forever:
+      (sleep 10))
+    (define callback
+      (make-generating-callback signal 1000 response-channel abort-box))
+    (define stream (open-test-stream callback))
+    (pa-start-stream stream)
+    (sleep 0.075)
+    (set-box! abort-box #t)
+    (test-end)
+    (check-for-finished))
+  
   3
   )))
 
-#|;; multiple streams? 
-
-(define (tone-1 t)
-  (* 0.1 (sin (* t 1/44100 440 twopi))))
-
-(define tone-1-callback ((make-generating-callback tone-1) (make-channel)))
-
-(define stream-1
-  (pa-open-default-stream
-                0             ;; input channels
-                2             ;; output channels
-                'paInt16      ;; sample format
-                44100.0       ;; sample rate
-                1000          ;;frames-per-buffer  ;; frames per buffer
-                tone-1-callback ;; callback (NULL means just wait for data)
-                #f))
-
-(collect-garbage)
-(collect-garbage)
-(collect-garbage)
-(pa-start-stream stream-1)
-
-(sleep 3)
-
-(define (tone-2 t)
-  (* 0.1 (sin (* t 1/44100 550 twopi))))
-
-(define tone-2-callback ((make-generating-callback tone-2) (make-channel)))
-
-
-(define stream-2
-  (pa-open-default-stream
-                0             ;; input channels
-                2             ;; output channels
-                'paInt16      ;; sample format
-                44100.0       ;; sample rate
-                1000          ;;frames-per-buffer  ;; frames per buffer
-                tone-2-callback ;; callback (NULL means just wait for data)
-                #f))
-
-(pa-start-stream stream-2)
-
-(sleep 3)
-|#
 
