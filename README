@@ -1,0 +1,2 @@
+This repo is split off from the RSound repo; it contains just the bindings
+for the portaudio library.
