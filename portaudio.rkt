@@ -2,8 +2,7 @@
 
 (require ffi/unsafe
          racket/runtime-path
-         (for-syntax syntax/parse)
-         (only-in '#%foreign ffi-callback))
+         (for-syntax syntax/parse))
 
 (provide (all-defined-out))
 
@@ -1232,13 +1231,14 @@ PaError Pa_OpenStream( PaStream** stream,
                      _ulong ;; framesPerBuffer
                      _pa-stream-flags ;; streamFlags
                      ;; note: give this a name to prevent it from getting collected:
-                     (callback : _pa-stream-callback) ;; streamCallback
-                     _pointer ;; userData?
+                     #;(callback : _pa-stream-callback) ;; streamCallback
+                     _pointer ;; this must be a C function pointer...
+                     _pointer ;; userData
                      -> (err : _pa-error)
                      -> (match err
                           ['paNoError result]
-                          [other (error 'pa-open-stream "~a ~a" (pa-get-error-text err)
-                                        callback)]))))
+                          [other (error 'pa-open-stream "~a" 
+                                        (pa-get-error-text err))]))))
 
 
 #| 
@@ -1291,13 +1291,14 @@ PaError Pa_OpenDefaultStream( PaStream** stream,
                      _double ;; sampleRate
                      _ulong ;; framesPerBuffer
                      ;; give this a name to prevent it from being collected:
-                     (callback : _pa-stream-callback) ;; streamCallback
+                     #;(callback : _pa-stream-callback) ;; streamCallback
+                     _pointer ;; callback
                      _pointer ;; userData?
                      -> (err : _pa-error)
                      -> (match err
                           ['paNoError result]
-                          [other (error 'pa-open-default-stream "~a ~a" (pa-get-error-text err)
-                                        callback)]))))
+                          [other (error 'pa-open-default-stream "~a" 
+                                        (pa-get-error-text err))]))))
 #|
 
 
@@ -1308,20 +1309,13 @@ PaError Pa_CloseStream( PaStream *stream );
 |#
 (define (pa-close-stream stream)
   ;; unregister with the custodian
-  (remove-managed stream)
+  #;(remove-managed stream)
   (pa-close-stream/raw stream))
 
 (define-checked pa-close-stream/raw
   (get-ffi-obj "Pa_CloseStream"
                libportaudio
                (_fun _pa-stream -> _pa-error)))
-
-(define close-stream-callback
- (ffi-callback (lambda (p _) 
-                 (log-info "closing stream")
-                 (pa-close-stream p)) 
-               (list _scheme _pointer)
-               _void))
 
 
 #|

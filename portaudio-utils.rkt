@@ -20,6 +20,20 @@
 (define s16max 32767)
 (define s16-bytes 2)
 
+
+(define-cstruct _rack-audio-closure
+  ([next-data _pointer]
+   [stop      _pointer]
+   [condition _int]))
+
+(define feeder-lib (ffi-lib (build-path libs "feeder.dylib")))
+
+;; in order to get a raw pointer to pass back to C, we declare 
+;; the function pointer as being a simple array of data:
+(define c-copying-callback-ptr
+  (array-ptr (get-ffi-obj "copyingCallback" feeder-lib (_array _uint64 1))))
+
+
 ;; UTILITIES:
 
 ;; spawn a new thread to put a value on a synchronous channel
@@ -45,42 +59,12 @@
 ;; create a callback that supplies frames from a buffer, using memcpy.
 ;; UNSAFE! : give a very large value for total-frames and watch it play memory
 ;; then crash.
-(define (make-copying-callback/cpointer master-buffer total-frames 
-                                        response-channel abort-box)
+(define (make-copying-callback/cpointer master-buffer total-frames)
   (define sample-offset 0) ;; mutable, to track through the buffer
   (define total-samples (* total-frames channels))
-  (define callback-holding-box (box #f))
-  (define (the-callback input output frame-count time-info status-flags user-data)
-    (cond [(unbox abort-box) 
-           (channel-put/async response-channel 'finished)
-           ;; no need to keep this callback alive any more:
-           (set-box! callback-holding-box #f)
-           'pa-abort]
-          [else 
-           ;; the following code is believed not to be able to raise any errors.
-           ;; if this is wrong, racket will die with abort().
-           (let ([buffer-samples (* frame-count channels)])
-             (cond
-               [(> (+ sample-offset buffer-samples) total-samples)
-                ;; for now, just truncate if it doesn't come out even:
-                ;; NB: all zero bits is the sint16 representation of 0
-                (memset output 0 buffer-samples _sint16)
-                (channel-put/async response-channel 'finished)
-                ;; no need to keep this callback alive any more:
-                (set-box! callback-holding-box #f)
-                'pa-complete]
-               [else
-                (memcpy output
-                        0
-                        master-buffer
-                        sample-offset
-                        buffer-samples
-                        _sint16)
-                (set! sample-offset (+ sample-offset buffer-samples))
-                'pa-continue]))]))
-  (set-box! callback-holding-box the-callback)
-  (set! callback-boxes (cons callback-holding-box callback-boxes))
-  the-callback)
+  (define end-pointer (ptr-add master-buffer total-samples _sint16))
+  (define closure-info (make-rack-audio-closure master-buffer end-pointer #f))
+  closure-info)
 
 ;; create a callback that creates frames by calling a signal repeatedly.
 ;; note that we don't bother checking to see whether the buffer is successfully
