@@ -9,8 +9,8 @@
 
 
 ;; use local copies of the libraries for Windows & Mac...
-(define-runtime-path win-dll-path "..\\lib\\portaudio_x86")
-(define-runtime-path mac-dll-path "../lib/libportaudio")
+(define-runtime-path win-dll-path "lib\\portaudio_x86")
+(define-runtime-path mac-dll-path "lib/libportaudio")
 
 (define libportaudio
   (case (system-type)
@@ -1236,9 +1236,8 @@ PaError Pa_OpenStream( PaStream** stream,
                      _pointer ;; userData?
                      -> (err : _pa-error)
                      -> (match err
-                          ['paNoError (add-managed result close-stream-callback)
-                                      result]
-                          [other (error 'pa-open-default-stream "~a ~a" (pa-get-error-text err)
+                          ['paNoError result]
+                          [other (error 'pa-open-stream "~a ~a" (pa-get-error-text err)
                                         callback)]))))
 
 
@@ -1296,8 +1295,7 @@ PaError Pa_OpenDefaultStream( PaStream** stream,
                      _pointer ;; userData?
                      -> (err : _pa-error)
                      -> (match err
-                          ['paNoError (add-managed result close-stream-callback)
-                                      result]
+                          ['paNoError result]
                           [other (error 'pa-open-default-stream "~a ~a" (pa-get-error-text err)
                                         callback)]))))
 #|

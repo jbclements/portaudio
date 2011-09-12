@@ -47,45 +47,53 @@
 ;; then crash.
 (define (make-copying-callback/cpointer master-buffer total-frames 
                                         response-channel abort-box)
-  (let* ([channels 2]
-         [sample-offset 0] ;; mutable, to track through the buffer
-         [total-samples (* total-frames channels)])
-    (lambda (input output frame-count time-info status-flags user-data)
-      (cond [(unbox abort-box) 
-             (channel-put/async response-channel 'finished)
-             'pa-abort]
-            [else 
-             ;; the following code is believed not to be able to raise any errors.
-             ;; if this is wrong, racket will die with abort().
-             (let ([buffer-samples (* frame-count channels)])
-                    (cond
-                      [(> (+ sample-offset buffer-samples) total-samples)
-                       ;; for now, just truncate if it doesn't come out even:
-                       ;; NB: all zero bits is the sint16 representation of 0
-                       (memset output 0 buffer-samples _sint16)
-                       (channel-put/async response-channel 'finished)
-                       'pa-complete]
-                      [else
-                       (memcpy output
-                                     0
-                                     master-buffer
-                                     sample-offset
-                                     buffer-samples
-                                     _sint16)
-                       (set! sample-offset (+ sample-offset buffer-samples))
-                       'pa-continue]))]))))
+  (define sample-offset 0) ;; mutable, to track through the buffer
+  (define total-samples (* total-frames channels))
+  (define callback-holding-box (box #f))
+  (define (the-callback input output frame-count time-info status-flags user-data)
+    (cond [(unbox abort-box) 
+           (channel-put/async response-channel 'finished)
+           ;; no need to keep this callback alive any more:
+           (set-box! callback-holding-box #f)
+           'pa-abort]
+          [else 
+           ;; the following code is believed not to be able to raise any errors.
+           ;; if this is wrong, racket will die with abort().
+           (let ([buffer-samples (* frame-count channels)])
+             (cond
+               [(> (+ sample-offset buffer-samples) total-samples)
+                ;; for now, just truncate if it doesn't come out even:
+                ;; NB: all zero bits is the sint16 representation of 0
+                (memset output 0 buffer-samples _sint16)
+                (channel-put/async response-channel 'finished)
+                ;; no need to keep this callback alive any more:
+                (set-box! callback-holding-box #f)
+                'pa-complete]
+               [else
+                (memcpy output
+                        0
+                        master-buffer
+                        sample-offset
+                        buffer-samples
+                        _sint16)
+                (set! sample-offset (+ sample-offset buffer-samples))
+                'pa-continue]))]))
+  (set-box! callback-holding-box the-callback)
+  (set! callback-boxes (cons callback-holding-box callback-boxes))
+  the-callback)
 
 ;; create a callback that creates frames by calling a signal repeatedly.
 ;; note that we don't bother checking to see whether the buffer is successfully
 ;; filled.
 (define (make-generating-callback signal buffer-frames response-channel abort-box)
   (define signal-exn-box (box #f))
-  (define-values (filled-buffer semaphore) 
+  (define-values (filled-buffer semaphore)
     (start-filler-thread signal buffer-frames signal-exn-box abort-box))
   (define buffer-samples (* buffer-frames channels))
   ;; allow the first buffer-fill to happen:
   (semaphore-post semaphore)
-  (lambda (input output frame-count time-info status-flags user-data)
+  (define callback-holding-box (box #f))
+  (define (the-callback input output frame-count time-info status-flags user-data)
     ;; the following code is believed not to be able to raise any errors.
     ;; if this is wrong, racket will die with abort().
     
@@ -94,6 +102,7 @@
            (define response
              (or (unbox signal-exn-box) 'finished))
            (channel-put/async response-channel response)
+           (set-box! callback-holding-box #f)
            'pa-abort]
           ;; don't run if we get the wrong number of frames requested:
           [(not (= frame-count buffer-frames))
@@ -105,6 +114,7 @@
               frame-count
               buffer-frames)
              (current-continuation-marks)))
+           (set-box! callback-holding-box #f)
            'pa-abort]
           ;; otherwise, copy and release the semaphore to generate again.
           [else
@@ -115,7 +125,9 @@
                    buffer-samples
                    _sint16)
            (semaphore-post semaphore)
-           'pa-continue])))
+           'pa-continue]))
+  (set-box! callback-holding-box the-callback)
+  the-callback)
 
 
 ;; this thread is not run as a callback. That way, if the user's signal
@@ -149,17 +161,27 @@
 
 ;; create a callback that creates frames by passing a cblock to a function
 (define (make-block-generating-callback signal/block/s16 response-channel abort-box)
-  (let* (#;[channels 2]
-         [s16max 32767]
-         [frame-offset 0] ;; mutable, to track time
-         )
-    (lambda (input output frame-count time-info status-flags user-data)
-      (cond [(unbox abort-box) 'pa-abort]
-            ;; MUST NOT ALLOW AN EXCEPTION TO ESCAPE.
-            [else (with-handlers ([(lambda (exn) #t)
-                                   (lambda (exn)
-                                     (channel-put/async response-channel exn)
-                                     'pa-abort)])
-                    (signal/block/s16 output frame-offset frame-count)
-                    (set! frame-offset (+ frame-offset frame-count))
-                    'pa-continue)]))))
+  (define frame-offset 0)
+  (define callback-holding-box (box #f))
+  (define (the-callback input output frame-count time-info status-flags user-data)
+    (cond [(unbox abort-box) 'pa-abort]
+          ;; MUST NOT ALLOW AN EXCEPTION TO ESCAPE.
+          [else (with-handlers ([(lambda (exn) #t)
+                                 (lambda (exn)
+                                   (channel-put/async response-channel exn)
+                                   'pa-abort)])
+                  (define keep-running? 
+                    (signal/block/s16 output frame-offset frame-count))
+                  (set! frame-offset (+ frame-offset frame-count))
+                  (cond [keep-running? 'pa-continue]
+                        [else (channel-put/async response-channel 'finished)
+                              (set-box! callback-holding-box #f)
+                              'pa-complete]))]))
+  (set-box! callback-holding-box the-callback)
+  the-callback)
+
+;; we need to hold on to the callbacks, so they don't get collected while
+;; the streams are still being processed.
+(define callback-boxes (list))
+
+

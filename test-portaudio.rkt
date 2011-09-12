@@ -76,8 +76,6 @@
   (define channels 2)
   (define s16max 32767)
   
-  ;; first, test the copying-callback.
-
   (define response-channel (make-channel))
   
   (define (check-for-finished)
@@ -101,6 +99,9 @@
   
     
   (define tone-buf-330 (make-tone-buf 330 22050))
+  
+  ;; first, test the copying-callback.
+
   
   ;; first test with the vector interface:
   (let ()
@@ -236,13 +237,15 @@
     (define callback
       (make-generating-callback signal 1000 response-channel abort-box))
     (define stream (open-test-stream callback))
+    (printf "short burst of static\n")
+    (test-start)
     (pa-start-stream stream)
     (sleep 0.075)
     (set-box! abort-box #t)
     (test-end)
     (check-for-finished))
   
-  3
+  
   )))
 
 
