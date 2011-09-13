@@ -4,8 +4,10 @@
 #include "lib/portaudio.h"
 
 typedef struct rackaudioClosure{
-  short *nextData;
-  short *stop;
+  // this sound is assumed to be malloc'ed, and gets freed when finished.
+  short *sound;
+  unsigned long curSample;
+  unsigned long numSamples;
   int stopNow;
 } rackaudioClosure;
 
@@ -13,9 +15,37 @@ typedef struct rackaudioClosure{
 
 #define MYMIN(a,b) ((a)<(b) ? (a) : (b))
 
+// copySound: just copy the whole darn sound into a freshly malloc'ed chunk.
+// not great, but solves *all* of the problems interacting with GC
+rackaudioClosure *createClosure(short *data, unsigned long samples) {
+
+  size_t numSoundBytes = (sizeof(short) * samples);
+  short *copiedSound = malloc(numSoundBytes);
+
+  if (copiedSound == NULL) {
+    return(NULL);
+  } else {
+    memcpy((void *)copiedSound,(void *)data,numSoundBytes);
+
+    rackaudioClosure *result = malloc(sizeof(rackaudioClosure));
+
+    if (result == NULL) {
+      free(copiedSound);
+      return(NULL);
+    } else {
+      result->sound = copiedSound;
+      result->curSample = 0;
+      result->numSamples = samples;
+      result->stopNow = 0;
+      return(result);
+    }
+  }
+}
+
+  
 // simplest possible feeder; copy bytes until you run out.
 // assumes 16-bit ints, 2 channels.
-// no external control
+// CALLS FREE ON THE SOUND AND THE RECORD WHEN FINISHED
 int copyingCallback(
     const void *input, void *output,
     unsigned long frameCount,
@@ -26,29 +56,35 @@ int copyingCallback(
   rackaudioClosure *ri = userData;
 
   if (ri->stopNow) {
+    free(ri->sound);
+    free(ri);
     return(paAbort);
   }
 
-  short *copyBegin = ri->nextData;
-  short *copyMaybeEnd = copyBegin + (frameCount * CHANNELS);
+  short *copyBegin = ri->sound + ri->curSample;
+  unsigned long samplesToCopy = frameCount * CHANNELS;
+  unsigned long nextCurSample = ri->curSample + samplesToCopy;
+  //short *copyMaybeEnd = copyBegin + (frameCount * CHANNELS);
 
-  if (ri->stop <= copyMaybeEnd) {
+  if (ri->numSamples <= nextCurSample) {
     // this is the last chunk.
-    size_t bytesToCopy = ((char *)ri->stop) - ((char *)copyBegin);
+    size_t bytesToCopy = sizeof(short) * (ri->numSamples - ri->curSample);
     memcpy(output,(void *)copyBegin,bytesToCopy);
     // zero out the rest of the buffer:
     char *zeroRegionBegin = (char *)output + bytesToCopy;
     size_t bytesToZero = (frameCount * CHANNELS * sizeof(short)) - bytesToCopy;
     memset(zeroRegionBegin,0,bytesToZero);
-    ri->nextData = ri->stop;
+    ri->curSample = ri->numSamples;
+    free(ri->sound);
+    free(ri);
     return(paComplete);
   } else {
     // this is not the last chunk. 
-    size_t bytesToCopy = sizeof(short) * (copyMaybeEnd - copyBegin);
+    size_t bytesToCopy = sizeof(short) * samplesToCopy;
     memcpy(output,(void *)copyBegin,bytesToCopy);
-    ri->nextData = copyMaybeEnd;
+    ri->curSample = nextCurSample;
     return(paContinue);
   }
 }
 
-  
+ 

@@ -12,17 +12,34 @@
 
 (define feeder-lib (ffi-lib (build-path libs "feeder.dylib")))
 
-(define src-buf (make-s16vector 1000 03))
+(define src-buf (make-s16vector 800 03))
 ;; fill with rands between 0 & 99:
-(for ([i (in-range 1000)])
+(for ([i (in-range 800)])
   (s16vector-set! src-buf i (random 100)))
 
 (define tgt-buf (make-s16vector 500 0))
 
 (define-cstruct _rack-audio-closure
-  ([next-data _pointer]
-   [stop      _pointer]
-   [stop-now  _bool]))
+  ([sound _pointer]
+   [curSample  _ulong]
+   [numSamples _ulong]
+   [stop-now   _bool]))
+
+;; create a fresh rack-audio-closure structure, including a full
+;; malloc'ed copy of the sound data
+(define (make-copying-closure s16vec)
+  (define closure
+    (create-closure/raw (s16vector->cpointer s16vec) 
+                        (s16vector-length s16vec)))
+  (unless closure
+    (error 'create-copying-closure
+           "failed to allocate space for ~s samples."
+           (s16vector-length s16vec)))
+  closure)
+
+(define create-closure/raw
+  (get-ffi-obj "createClosure" feeder-lib
+               (_fun _pointer _ulong -> _rack-audio-closure-pointer)))
 
 (define _my-pa-stream-callback
   (_fun #:atomic? #t
@@ -39,19 +56,12 @@
 (define feeder 
   (get-ffi-obj "copyingCallback" feeder-lib _my-pa-stream-callback))
 
-
-
-(define src-cpointer (s16vector->cpointer src-buf))
-(define src-end (ptr-add src-cpointer 800 _sint16))
-
-(define closure-info
-  (make-rack-audio-closure src-cpointer
-                            src-end
-                            #f))
-
 (run-tests
 (test-suite "call to C audio feeder"
 (let ()
+  
+  (define closure-info (make-copying-closure src-buf))
+
 (check-equal?
  (feeder #f (s16vector->cpointer tgt-buf) 100 #f '() closure-info)
  'pa-continue)
@@ -64,8 +74,8 @@
                 (= (s16vector-ref tgt-buf i)
                    0))
               #t)
-(check-equal? (rack-audio-closure->list closure-info)
-              (list (ptr-add src-cpointer 200 _sint16) src-end #f))
+(check-equal? (rest (rack-audio-closure->list closure-info))
+              (list 200 800 #f))
 
 (check-equal?
  (feeder #f (s16vector->cpointer tgt-buf) 100 #f '() closure-info)
@@ -84,23 +94,27 @@
                 (= (s16vector-ref tgt-buf i)
                    0))
               #t)
-(check-equal? (rack-audio-closure->list closure-info)
-              (list (ptr-add src-cpointer 800 _sint16) src-end #f))
+(check-equal? (rest (rack-audio-closure->list closure-info))
+              (list 800 800 #f))
 
 ;; how about when things don't come out even?
 
-(define closure-info-uneven
-  (make-rack-audio-closure src-cpointer
-                           (ptr-add src-cpointer 350 _sint16)
-                           #f))
+  (define uneven-len-vec (make-s16vector 350 0))
+  (for ([i (in-range 350)])
+    (s16vector-set! uneven-len-vec i (random 100)))
+  
+(define closure-info-uneven (make-copying-closure uneven-len-vec))
+  
 (check-equal?
  (feeder #f (s16vector->cpointer tgt-buf) 100 #f '() closure-info-uneven)
  'pa-continue)
+  
 (check-equal?
  (feeder #f (s16vector->cpointer tgt-buf) 100 #f '() closure-info-uneven)
  'pa-complete)
+  
 (check-equal? (for/and ([i (in-range 150)])
-                (= (s16vector-ref src-buf (+ 200 i)) 
+                (= (s16vector-ref uneven-len-vec (+ 200 i)) 
                    (s16vector-ref tgt-buf i)))
               #t)
 (check-equal? (for/and ([i (in-range 150 500)])
@@ -116,11 +130,7 @@
 (define tone-buf-470 (make-tone-buf 470 (* 1 sr)))
 (define tone-buf-cpointer (s16vector->cpointer tone-buf-470))
 (define closure-info-470 
-  (make-rack-audio-closure tone-buf-cpointer
-                           (ptr-add tone-buf-cpointer
-                                    (s16vector-length tone-buf-470)
-                                    _sint16)
-                           #f))
+  (make-copying-closure tone-buf-470))
 
 ;; reload as a raw pointer:
 
@@ -154,9 +164,7 @@
 
 (let ()
   (define closure-info-470
-    (make-rack-audio-closure tone-buf-cpointer
-                             (ptr-add tone-buf-cpointer (s16vector-length tone-buf-470) _sint16)
-                             #f))
+    (make-copying-closure tone-buf-470))
   
   (define my-stream
     (pa-open-default-stream
