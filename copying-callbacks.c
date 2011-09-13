@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <scheme.h>
 #include "lib/portaudio.h"
 
 typedef struct rackaudioClosure{
@@ -9,6 +10,7 @@ typedef struct rackaudioClosure{
   unsigned long curSample;
   unsigned long numSamples;
   int stopNow;
+  Scheme_Object *stopSema;
 } rackaudioClosure;
 
 #define CHANNELS 2
@@ -17,7 +19,9 @@ typedef struct rackaudioClosure{
 
 // copySound: just copy the whole darn sound into a freshly malloc'ed chunk.
 // not great, but solves *all* of the problems interacting with GC
-rackaudioClosure *createClosure(short *data, unsigned long samples) {
+rackaudioClosure *createClosure(short *data,
+                                unsigned long samples,
+                                Scheme_Object *stopSema) {
 
   size_t numSoundBytes = (sizeof(short) * samples);
   short *copiedSound = malloc(numSoundBytes);
@@ -37,6 +41,7 @@ rackaudioClosure *createClosure(short *data, unsigned long samples) {
       result->curSample = 0;
       result->numSamples = samples;
       result->stopNow = 0;
+      result->stopSema = stopSema;
       return(result);
     }
   }
@@ -56,8 +61,7 @@ int copyingCallback(
   rackaudioClosure *ri = userData;
 
   if (ri->stopNow) {
-    free(ri->sound);
-    free(ri);
+    freeClosure(ri);
     return(paAbort);
   }
 
@@ -75,9 +79,10 @@ int copyingCallback(
     size_t bytesToZero = (frameCount * CHANNELS * sizeof(short)) - bytesToCopy;
     memset(zeroRegionBegin,0,bytesToZero);
     ri->curSample = ri->numSamples;
-    free(ri->sound);
-    free(ri);
+
+    freeClosure(ri);
     return(paComplete);
+    
   } else {
     // this is not the last chunk. 
     size_t bytesToCopy = sizeof(short) * samplesToCopy;
@@ -87,4 +92,12 @@ int copyingCallback(
   }
 }
 
- 
+// clean up when done: post to the finished
+// semaphore, free the sound data and the
+// closure data
+void freeClosure(rackaudioClosure *ri){
+  scheme_post_sema(ri->stopSema);
+  free(ri->sound);
+  free(ri);
+}
+  

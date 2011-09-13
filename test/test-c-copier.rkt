@@ -8,9 +8,9 @@
          "../portaudio.rkt"
          "helpers.rkt")
 
-(define-runtime-path libs "../")
+(define-runtime-path libs "../lib")
 
-(define feeder-lib (ffi-lib (build-path libs "feeder.dylib")))
+(define feeder-lib (ffi-lib (build-path libs "copying-callbacks.dylib")))
 
 (define src-buf (make-s16vector 800 03))
 ;; fill with rands between 0 & 99:
@@ -23,14 +23,16 @@
   ([sound _pointer]
    [curSample  _ulong]
    [numSamples _ulong]
-   [stop-now   _bool]))
+   [stop-now   _bool]
+   [stop-sema  _racket]))
 
 ;; create a fresh rack-audio-closure structure, including a full
 ;; malloc'ed copy of the sound data
 (define (make-copying-closure s16vec)
   (define closure
     (create-closure/raw (s16vector->cpointer s16vec) 
-                        (s16vector-length s16vec)))
+                        (s16vector-length s16vec)
+                        (make-semaphore)))
   (unless closure
     (error 'create-copying-closure
            "failed to allocate space for ~s samples."
@@ -39,7 +41,7 @@
 
 (define create-closure/raw
   (get-ffi-obj "createClosure" feeder-lib
-               (_fun _pointer _ulong -> _rack-audio-closure-pointer)))
+               (_fun _pointer _ulong _racket -> _rack-audio-closure-pointer)))
 
 (define _my-pa-stream-callback
   (_fun #:atomic? #t
@@ -95,7 +97,7 @@
                    0))
               #t)
 (check-equal? (rest (rack-audio-closure->list closure-info))
-              (list 800 800 #f))
+              (list 800 800 #f (rack-audio-closure-stop-sema closure-info)))
 
 ;; how about when things don't come out even?
 

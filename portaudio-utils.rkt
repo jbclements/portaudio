@@ -1,71 +1,67 @@
 #lang racket
 
 (require ffi/vector
-         (except-in ffi/unsafe ->))
+         ffi/unsafe
+         (rename-in racket/contract [-> c->])
+         racket/runtime-path)
 
+(define-runtime-path lib "lib/")
 
 (define (frames? n)
   (and (exact-integer? n)
        (<= 0 n)))
 
+
+
 (provide/contract 
- [make-copying-callback (-> s16vector? channel? box? any)]
- ;; UNSAFE:
- [make-copying-callback/cpointer (-> cpointer? frames? channel? box? any)]
- [make-generating-callback (-> procedure? frames? channel? box? any)]
- [make-block-generating-callback (-> procedure? channel? box? any)])
+ [make-copying-closure (c-> s16vector? cpointer?)]
+ [copying-callback cpointer?]
+ #;[make-generating-callback (c-> procedure? frames? channel? box? any)]
+ #;[make-block-generating-callback (c-> procedure? channel? box? any)])
 
 ;; all of these functions assume 2-channel-interleaved 16-bit input:
 (define channels 2)
 (define s16max 32767)
 (define s16-bytes 2)
 
+;; COPYING CALLBACKS
 
 (define-cstruct _rack-audio-closure
-  ([next-data _pointer]
-   [stop      _pointer]
-   [condition _int]))
+  ([sound _pointer]
+   [curSample  _ulong]
+   [numSamples _ulong]
+   [stop-now   _bool]))
 
-(define feeder-lib (ffi-lib (build-path libs "feeder.dylib")))
+(define copying-callbacks-lib (ffi-lib (build-path lib "copying-callbacks")))
 
 ;; in order to get a raw pointer to pass back to C, we declare 
 ;; the function pointer as being a simple array of data:
-(define c-copying-callback-ptr
-  (array-ptr (get-ffi-obj "copyingCallback" feeder-lib (_array _uint64 1))))
+(define copying-callback
+  (array-ptr (get-ffi-obj "copyingCallback" 
+                          copying-callbacks-lib (_array _uint64 1))))
 
 
-;; UTILITIES:
 
-;; spawn a new thread to put a value on a synchronous channel
-(define (channel-put/async channel val)
-  (thread (lambda () 
-            (channel-put channel val))))
+;; create a fresh rack-audio-closure structure, including a full
+;; malloc'ed copy of the sound data
+(define (make-copying-closure s16vec)
+  (define closure
+    (create-closure/raw (s16vector->cpointer s16vec) 
+                        (s16vector-length s16vec)))
+  (unless closure
+    (error 'create-copying-closure
+           "failed to allocate space for ~s samples."
+           (s16vector-length s16vec)))
+  closure)
 
-;; create a callback that supplies frames from an s16vector.
-(define (make-copying-callback s16vec response-channel abort-box)
-  (define s16vec-len (s16vector-length s16vec))
-  (unless (= (modulo s16vec-len 2) 0)
-    (raise-type-error 'make-copying-callback
-                      "vector of length divisible by two"
-                      0
-                      s16vec
-                      response-channel
-                      abort-box))
-  (make-copying-callback/cpointer (s16vector->cpointer s16vec) 
-                                  (/ s16vec-len 2)
-                                  response-channel
-                                  abort-box))
+(define create-closure/raw
+  (get-ffi-obj "createClosure" copying-callbacks-lib
+               (_fun _pointer _ulong -> _rack-audio-closure-pointer)))
 
-;; create a callback that supplies frames from a buffer, using memcpy.
-;; UNSAFE! : give a very large value for total-frames and watch it play memory
-;; then crash.
-(define (make-copying-callback/cpointer master-buffer total-frames)
-  (define sample-offset 0) ;; mutable, to track through the buffer
-  (define total-samples (* total-frames channels))
-  (define end-pointer (ptr-add master-buffer total-samples _sint16))
-  (define closure-info (make-rack-audio-closure master-buffer end-pointer #f))
-  closure-info)
 
+
+
+#|
 ;; create a callback that creates frames by calling a signal repeatedly.
 ;; note that we don't bother checking to see whether the buffer is successfully
 ;; filled.
@@ -169,3 +165,4 @@
 (define callback-boxes (list))
 
 
+|#

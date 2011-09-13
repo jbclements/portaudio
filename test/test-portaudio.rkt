@@ -93,17 +93,13 @@
   ;; first test with the vector interface:
   (let ()
     (define abort-box (box #f))
-    (define callback
-      (make-copying-callback tone-buf-330
-                             response-channel
-                             abort-box))
-    (define stream (open-test-stream callback))
+    (define callback-info (make-copying-closure tone-buf-330))
+    (define stream (open-test-stream copying-callback callback-info))
     (printf "1/2 second @ 330 Hz\n")
     (test-start)
     (pa-start-stream stream)
     (sleep 0.5)
-    (test-end)
-    (check-for-finished))
+    (test-end))
 
   ;; second test with the cpointer interface:
   (let ()
