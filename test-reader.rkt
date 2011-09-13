@@ -1,29 +1,25 @@
 #lang racket
 
 (require ffi/unsafe
-         ffi/vector)
+         ffi/vector
+         rackunit)
 
 (define lib (ffi-lib "reader.dylib"))
 
-(define old-fetch
-  (get-ffi-obj "oldFetchFirstWord" lib
-               (_fun _pointer -> _ulong)))
 
-#|unsigned long oldFetchFirstWord(unsigned long *data){
-  return (unsigned long)data;
-}
-|#
+(define-struct info (a b c))
 
-(define new-fetch
-  (get-ffi-obj "fetchFirstWord" lib
-               (_fun _pointer -> _ulong)))
+(define my-info (make-info 12 13 14))
 
+(define info-holder (malloc-immobile-cell my-info))
 
-(define u64vec (make-u64vector 1000))
+(define info-holder-ptr (ptr-ref info-holder _racket))
 
-(for ([i (in-range 1000)])
-  (s16vector-set! u64vec i (random 100)))
+(define find-elements
+  (get-ffi-obj "findElements" lib
+               (_fun _racket _racket -> _ulong)))
 
+(eq? info-holder-ptr my-info)
 
-(number->string (old-fetch (s16vector->cpointer s16vec)) 16)
-(check-e(number->string (new-fetch (s16vector->cpointer s16vec)) 16))
+(find-elements info-holder-ptr info-holder)
+
