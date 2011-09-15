@@ -2,7 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <scheme.h>
-#include "lib/portaudio.h"
+#include "portaudio.h"
 
 typedef struct rackaudioClosure{
   // this sound is assumed to be malloc'ed, and gets freed when finished.
@@ -10,7 +10,7 @@ typedef struct rackaudioClosure{
   unsigned long curSample;
   unsigned long numSamples;
   int stopNow;
-  Scheme_Object *stopSema;
+  Scheme_Object **stopSemaPtr;
 } rackaudioClosure;
 
 #define CHANNELS 2
@@ -21,7 +21,7 @@ typedef struct rackaudioClosure{
 // not great, but solves *all* of the problems interacting with GC
 rackaudioClosure *createClosure(short *data,
                                 unsigned long samples,
-                                Scheme_Object *stopSema) {
+                                Scheme_Object **stopSemaPtr) {
 
   size_t numSoundBytes = (sizeof(short) * samples);
   short *copiedSound = malloc(numSoundBytes);
@@ -41,7 +41,7 @@ rackaudioClosure *createClosure(short *data,
       result->curSample = 0;
       result->numSamples = samples;
       result->stopNow = 0;
-      result->stopSema = stopSema;
+      result->stopSemaPtr = stopSemaPtr;
       return(result);
     }
   }
@@ -96,7 +96,12 @@ int copyingCallback(
 // semaphore, free the sound data and the
 // closure data
 void freeClosure(rackaudioClosure *ri){
-  scheme_post_sema(ri->stopSema);
+  if (SCHEME_SEMAP(*(ri->stopSemaPtr))) {
+    printf("yep, it's a semaphore\n");
+  } else {
+    printf ("nope.\n");
+  }
+  scheme_post_sema(*ri->stopSemaPtr);
   free(ri->sound);
   free(ri);
 }

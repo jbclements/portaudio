@@ -12,6 +12,8 @@
 
 (define feeder-lib (ffi-lib (build-path libs "copying-callbacks.dylib")))
 
+feeder-lib
+
 (define src-buf (make-s16vector 800 03))
 ;; fill with rands between 0 & 99:
 (for ([i (in-range 800)])
@@ -20,19 +22,22 @@
 (define tgt-buf (make-s16vector 500 0))
 
 (define-cstruct _rack-audio-closure
-  ([sound _pointer]
-   [curSample  _ulong]
-   [numSamples _ulong]
-   [stop-now   _bool]
-   [stop-sema  _racket]))
+  ([sound         _pointer]
+   [curSample     _ulong]
+   [numSamples    _ulong]
+   [stop-now      _bool]
+   [stop-sema-ptr _pointer]))
 
 ;; create a fresh rack-audio-closure structure, including a full
 ;; malloc'ed copy of the sound data
 (define (make-copying-closure s16vec)
+  (define finished-semaphore (make-semaphore))
+  ;; will never get freed....
+  (define immobile-cell (malloc-immobile-cell finished-semaphore))
   (define closure
     (create-closure/raw (s16vector->cpointer s16vec) 
                         (s16vector-length s16vec)
-                        (make-semaphore)))
+                        immobile-cell))
   (unless closure
     (error 'create-copying-closure
            "failed to allocate space for ~s samples."
@@ -41,7 +46,7 @@
 
 (define create-closure/raw
   (get-ffi-obj "createClosure" feeder-lib
-               (_fun _pointer _ulong _racket -> _rack-audio-closure-pointer)))
+               (_fun _pointer _ulong _pointer -> _rack-audio-closure-pointer)))
 
 (define _my-pa-stream-callback
   (_fun #:atomic? #t
@@ -77,7 +82,7 @@
                    0))
               #t)
 (check-equal? (rest (rack-audio-closure->list closure-info))
-              (list 200 800 #f))
+              (list 200 800 #f (rack-audio-closure-stop-sema-ptr closure-info)))
 
 (check-equal?
  (feeder #f (s16vector->cpointer tgt-buf) 100 #f '() closure-info)
@@ -97,7 +102,7 @@
                    0))
               #t)
 (check-equal? (rest (rack-audio-closure->list closure-info))
-              (list 800 800 #f (rack-audio-closure-stop-sema closure-info)))
+              (list 800 800 #f (rack-audio-closure-stop-sema-ptr closure-info)))
 
 ;; how about when things don't come out even?
 
