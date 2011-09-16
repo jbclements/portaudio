@@ -59,10 +59,13 @@
 (define copying-callbacks-lib (ffi-lib (build-path lib "copying-callbacks")))
 
 ;; in order to get a raw pointer to pass back to C, we declare 
-;; the function pointer as being a simple array of data:
+;; the function pointer as being a simple struct:
+(define-cstruct _bogus-struct
+  ([datum _uint16]))
+
 (define copying-callback
-  (array-ptr (get-ffi-obj "copyingCallback" 
-                          copying-callbacks-lib (_array _uint64 1))))
+  (get-ffi-obj "copyingCallback"
+               copying-callbacks-lib _bogus-struct))
 
 (define create-closure/raw
   (get-ffi-obj "createClosure" copying-callbacks-lib
