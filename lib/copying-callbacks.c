@@ -96,12 +96,13 @@ int copyingCallback(
 // semaphore, free the sound data and the
 // closure data
 void freeClosure(rackaudioClosure *ri){
-  if (SCHEME_SEMAP(*(ri->stopSemaPtr))) {
+  // why does this crash?
+  /*if (SCHEME_SEMAP(*(ri->stopSemaPtr))) {
     printf("yep, it's a semaphore\n");
   } else {
     printf ("nope.\n");
   }
-  scheme_post_sema(*ri->stopSemaPtr);
+  scheme_post_sema(*(ri->stopSemaPtr));*/
   free(ri->sound);
   free(ri);
 }

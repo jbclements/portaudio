@@ -63,21 +63,8 @@
      callback      ;; callback (NULL means just wait for data)
      closure-info-ptr))
   
-  (define response-channel (make-channel))
-  
-  (define (check-for-finished)
-    (check-for-finished/n 1))
-  
-  ;; check that there are 'n' 'finished' symbols waiting in 
-  ;; the response channel.
-  (define (check-for-finished/n n)
-    (for ([i (in-range n)])
-      (check-equal? (channel-try-get response-channel) 'finished))
-    (check-equal? (channel-try-get response-channel) #f))
-  
   (define (test-start) 
     (sleep 2)
-    (check-equal? (channel-try-get response-channel) #f)
     (printf "starting now... "))
   
   (define (test-end)
@@ -93,73 +80,48 @@
   ;; first test with the vector interface:
   (let ()
     (define abort-box (box #f))
-    (define callback-info (make-copying-closure tone-buf-330))
+    (define callback-info (make-sndplay-record tone-buf-330))
     (define stream (open-test-stream copying-callback callback-info))
     (printf "1/2 second @ 330 Hz\n")
     (test-start)
     (pa-start-stream stream)
     (sleep 0.5)
     (test-end))
-
-  ;; second test with the cpointer interface:
-  (let ()
-    (define abort-box (box #f))
-    (define callback
-      (make-copying-callback/cpointer
-       (s16vector->cpointer tone-buf-330)
-       22050
-       response-channel
-       abort-box))
-    (define stream (open-test-stream callback))
-    (printf "1/2 second @ 330 Hz\n")
-    (test-start)
-    (pa-start-stream stream)
-    (sleep 0.5)
-    (test-end)
-    (check-for-finished))
   
   (define tone-buf-380 (make-tone-buf 380 22050))
   
   ;; two simultaneous streams, 330 & 380 Hz
   (let ()
     (define stream-1 (open-test-stream 
-                      (make-copying-callback
-                       tone-buf-330
-                       response-channel 
-                       (box #f))))
+                      copying-callback
+                      (make-sndplay-record tone-buf-330)))
     (define stream-2 (open-test-stream
-                      (make-copying-callback 
-                       tone-buf-380
-                       response-channel 
-                       (box #f))))
+                      copying-callback
+                      (make-sndplay-record tone-buf-380)))
     (printf "1/2 second @ 330 & 380 Hz\n")
     (test-start)
     (pa-start-stream stream-1)
     (pa-start-stream stream-2)
     (sleep 0.5)
-    (test-end)
-    (check-for-finished/n 2))
+    (test-end))
   
   ;; ending a stream with the abort-box
   (let ()
     ;; a 10-second tone
-    (define abort-box (box #f))
     (define longer-tone-buf (make-tone-buf 440 441000))
+    (define info (make-sndplay-record longer-tone-buf))
     (define stream-1 (open-test-stream 
-                      (make-copying-callback
-                       longer-tone-buf
-                       response-channel 
-                       abort-box)))
+                      copying-callback
+                      info))
     (printf "1/2 second @ 440 Hz\n")
     (test-start)
     (pa-start-stream stream-1)
     (sleep 0.5)
-    (set-box! abort-box #t)
-    (test-end)
-    (check-for-finished))
+    (stop-sound info)
+    (test-end))
   
   ;; GENERATING CALLBACKS
-  (let ()
+  #;(let ()
     (define abort-box (box #f))
     (define (signal t)
       (* 0.1 (sin (* t 1/44100 2 pi 410))))
@@ -171,12 +133,11 @@
     (pa-start-stream stream)
     (sleep 0.5)
     (set-box! abort-box #t)
-    (test-end)
-    (check-for-finished))
+    (test-end))
   
   ;; check for wrong size buffer
   
-  (let ()
+  #;(let ()
     (define abort-box (box #f))
     (define (signal t)
       (* 0.1 (sin (* t 1/44100 2 pi 410))))
@@ -194,7 +155,7 @@
     (check-equal? (channel-try-get response-channel) #f))
   
   ;; check for signal that fails
-  (let ()
+  #;(let ()
     (define abort-box (box #f))
     (define (signal t)
       (error 'signal "I'm a bad signal."))
@@ -212,7 +173,7 @@
     (check-equal? (channel-try-get response-channel) #f))
   
   ;; check for signal that stalls (should play brief burst of static)
-  (let ()
+  #;(let ()
     (define abort-box (box #f))
     (define (signal t)
       ;; sleep essentially forever:
@@ -225,8 +186,7 @@
     (pa-start-stream stream)
     (sleep 0.075)
     (set-box! abort-box #t)
-    (test-end)
-    (check-for-finished))
+    (test-end))
   
   
   )))

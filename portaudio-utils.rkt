@@ -14,8 +14,9 @@
 
 
 (provide/contract 
- [make-copying-closure (c-> s16vector? cpointer?)]
+ [make-sndplay-record (c-> s16vector? cpointer?)]
  [copying-callback cpointer?]
+ [stop-sound (c-> cpointer? void?)]
  #;[make-generating-callback (c-> procedure? frames? channel? box? any)]
  #;[make-block-generating-callback (c-> procedure? channel? box? any)])
 
@@ -27,11 +28,34 @@
 ;; COPYING CALLBACKS
 
 (define-cstruct _rack-audio-closure
-  ([sound _pointer]
-   [curSample  _ulong]
-   [numSamples _ulong]
-   [stop-now   _bool]))
+  ([sound         _pointer]
+   [curSample     _ulong]
+   [numSamples    _ulong]
+   [stop-now      _bool]
+   [stop-sema-ptr _pointer]))
 
+;; create a fresh rack-audio-closure structure, including a full
+;; malloc'ed copy of the sound data
+(define (make-sndplay-record s16vec)
+  (define finished-semaphore (make-semaphore))
+  ;; will never get freed....
+  ;; commenting this out until it stops seg faulting
+  #;(define immobile-cell (malloc-immobile-cell finished-semaphore))
+  (define closure
+    (create-closure/raw (s16vector->cpointer s16vec) 
+                        (s16vector-length s16vec)
+                        #f #;immobile-cell))
+  (unless closure
+    (error 'create-copying-closure
+           "failed to allocate space for ~s samples."
+           (s16vector-length s16vec)))
+  closure)
+
+;; stop a sound
+(define (stop-sound sndplay-record)
+  (set-rack-audio-closure-stop-now! sndplay-record #t))
+
+;; the library containing the C copying callbacks
 (define copying-callbacks-lib (ffi-lib (build-path lib "copying-callbacks")))
 
 ;; in order to get a raw pointer to pass back to C, we declare 
@@ -40,23 +64,9 @@
   (array-ptr (get-ffi-obj "copyingCallback" 
                           copying-callbacks-lib (_array _uint64 1))))
 
-
-
-;; create a fresh rack-audio-closure structure, including a full
-;; malloc'ed copy of the sound data
-(define (make-copying-closure s16vec)
-  (define closure
-    (create-closure/raw (s16vector->cpointer s16vec) 
-                        (s16vector-length s16vec)))
-  (unless closure
-    (error 'create-copying-closure
-           "failed to allocate space for ~s samples."
-           (s16vector-length s16vec)))
-  closure)
-
 (define create-closure/raw
   (get-ffi-obj "createClosure" copying-callbacks-lib
-               (_fun _pointer _ulong -> _rack-audio-closure-pointer)))
+               (_fun _pointer _ulong _pointer -> _rack-audio-closure-pointer)))
 
 
 

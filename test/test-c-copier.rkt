@@ -6,6 +6,7 @@
          rackunit/text-ui
          racket/runtime-path
          "../portaudio.rkt"
+         "../portaudio-utils.rkt"
          "helpers.rkt")
 
 (define-runtime-path libs "../lib")
@@ -21,33 +22,6 @@ feeder-lib
 
 (define tgt-buf (make-s16vector 500 0))
 
-(define-cstruct _rack-audio-closure
-  ([sound         _pointer]
-   [curSample     _ulong]
-   [numSamples    _ulong]
-   [stop-now      _bool]
-   [stop-sema-ptr _pointer]))
-
-;; create a fresh rack-audio-closure structure, including a full
-;; malloc'ed copy of the sound data
-(define (make-copying-closure s16vec)
-  (define finished-semaphore (make-semaphore))
-  ;; will never get freed....
-  (define immobile-cell (malloc-immobile-cell finished-semaphore))
-  (define closure
-    (create-closure/raw (s16vector->cpointer s16vec) 
-                        (s16vector-length s16vec)
-                        immobile-cell))
-  (unless closure
-    (error 'create-copying-closure
-           "failed to allocate space for ~s samples."
-           (s16vector-length s16vec)))
-  closure)
-
-(define create-closure/raw
-  (get-ffi-obj "createClosure" feeder-lib
-               (_fun _pointer _ulong _pointer -> _rack-audio-closure-pointer)))
-
 (define _my-pa-stream-callback
   (_fun #:atomic? #t
         #:keep #t
@@ -57,8 +31,16 @@ feeder-lib
         _ulong
         _pa-stream-callback-time-info-pointer/null
         _pa-stream-callback-flags
-        _rack-audio-closure-pointer
+        _pointer
         -> _pa-stream-callback-result))
+
+
+(define-cstruct _rack-audio-closure
+  ([sound         _pointer]
+   [curSample     _ulong]
+   [numSamples    _ulong]
+   [stop-now      _bool]
+   [stop-sema-ptr _pointer]))
 
 (define feeder 
   (get-ffi-obj "copyingCallback" feeder-lib _my-pa-stream-callback))
@@ -67,7 +49,7 @@ feeder-lib
 (test-suite "call to C audio feeder"
 (let ()
   
-  (define closure-info (make-copying-closure src-buf))
+  (define closure-info (make-sndplay-record src-buf))
 
 (check-equal?
  (feeder #f (s16vector->cpointer tgt-buf) 100 #f '() closure-info)
@@ -110,7 +92,7 @@ feeder-lib
   (for ([i (in-range 350)])
     (s16vector-set! uneven-len-vec i (random 100)))
   
-(define closure-info-uneven (make-copying-closure uneven-len-vec))
+(define closure-info-uneven (make-sndplay-record uneven-len-vec))
   
 (check-equal?
  (feeder #f (s16vector->cpointer tgt-buf) 100 #f '() closure-info-uneven)
@@ -137,7 +119,7 @@ feeder-lib
 (define tone-buf-470 (make-tone-buf 470 (* 1 sr)))
 (define tone-buf-cpointer (s16vector->cpointer tone-buf-470))
 (define closure-info-470 
-  (make-copying-closure tone-buf-470))
+  (make-sndplay-record tone-buf-470))
 
 ;; reload as a raw pointer:
 
@@ -171,7 +153,7 @@ feeder-lib
 
 (let ()
   (define closure-info-470
-    (make-copying-closure tone-buf-470))
+    (make-sndplay-record tone-buf-470))
   
   (define my-stream
     (pa-open-default-stream
