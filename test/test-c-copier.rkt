@@ -11,7 +11,7 @@
 
 (define-runtime-path libs "../lib")
 
-(define feeder-lib (ffi-lib (build-path libs "copying-callbacks.dylib")))
+(define feeder-lib (ffi-lib (build-path libs "copying-callbacks")))
 
 feeder-lib
 
@@ -37,10 +37,15 @@ feeder-lib
 
 (define-cstruct _rack-audio-closure
   ([sound         _pointer]
-   [curSample     _ulong]
-   [numSamples    _ulong]
+   [cur-sample    _ulong]
+   [num-samples   _ulong]
    [stop-now      _bool]
    [stop-sema-ptr _pointer]))
+
+(define (rack-audio-record-testable rack-audio-record)
+  (list (rack-audio-closure-cur-sample rack-audio-record)
+        (rack-audio-closure-num-samples rack-audio-record)
+        (rack-audio-closure-stop-now rack-audio-record)))
 
 (define feeder 
   (get-ffi-obj "copyingCallback" feeder-lib _my-pa-stream-callback))
@@ -63,8 +68,8 @@ feeder-lib
                 (= (s16vector-ref tgt-buf i)
                    0))
               #t)
-(check-equal? (rest (rack-audio-closure->list closure-info))
-              (list 200 800 #f (rack-audio-closure-stop-sema-ptr closure-info)))
+  (check-equal? (rack-audio-record-testable closure-info)
+              (list 200 800 #f))
 
 (check-equal?
  (feeder #f (s16vector->cpointer tgt-buf) 100 #f '() closure-info)
@@ -83,8 +88,8 @@ feeder-lib
                 (= (s16vector-ref tgt-buf i)
                    0))
               #t)
-(check-equal? (rest (rack-audio-closure->list closure-info))
-              (list 800 800 #f (rack-audio-closure-stop-sema-ptr closure-info)))
+  (check-equal? (rack-audio-record-testable closure-info)
+              (list 800 800 #f))
 
 ;; how about when things don't come out even?
 
