@@ -123,11 +123,11 @@ feeder-lib
 
 ;; reload as a raw pointer:
 
-(define feeder/raw 
-  (get-ffi-obj "copyingCallback" feeder-lib (_array _uint64 1)))
+(define-cstruct _bogus-struct
+  ([datum _uint64]))
 
 (define feeder/ptr
-  (array-ptr feeder/raw))
+  (get-ffi-obj "copyingCallback" feeder-lib _bogus-struct))
 
 (pa-maybe-initialize)
 (define my-stream 
