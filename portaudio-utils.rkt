@@ -49,14 +49,24 @@
     (error 'create-copying-closure
            "failed to allocate space for ~s samples."
            (s16vector-length s16vec)))
+  (hash-set! sound-stopping-table closure (make-semaphore 1))
   closure)
 
 ;; stop a sound
+;; EFFECT: stops the sound *and frees the sndplay-record*, unless
+;; it's already done.
 (define (stop-sound sndplay-record)
-  (set-rack-audio-closure-stop-now! sndplay-record #t))
+  (match (hash-ref sound-stopping-table sndplay-record #f)
+    [#f (error 'stop-sound "record had no entry in the stopping table")]
+    [sema (match (semaphore-try-wait? sema)
+            ;; sound has already been stopped
+            [#f (void)]
+            [#t (set-rack-audio-closure-stop-now! sndplay-record #t)])]))
 
 ;; the library containing the C copying callbacks
-(define copying-callbacks-lib (ffi-lib (build-path lib "copying-callbacks")))
+(define copying-callbacks-lib (ffi-lib (build-path lib
+                                                   (system-library-subpath)
+                                                   "copying-callbacks")))
 
 ;; in order to get a raw pointer to pass back to C, we declare 
 ;; the function pointer as being a simple struct:
@@ -70,6 +80,9 @@
 (define create-closure/raw
   (get-ffi-obj "createClosure" copying-callbacks-lib
                (_fun _pointer _ulong _pointer -> _rack-audio-closure-pointer)))
+
+
+(define sound-stopping-table (make-weak-hash))
 
 
 

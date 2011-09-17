@@ -11,9 +11,11 @@
 
 (define-runtime-path libs "../lib")
 
-(define feeder-lib (ffi-lib (build-path libs "copying-callbacks")))
 
-feeder-lib
+(define feeder-lib (ffi-lib (build-path libs
+                                        (system-library-subpath)
+                                        "copying-callbacks")))
+
 
 (define src-buf (make-s16vector 800 03))
 ;; fill with rands between 0 & 99:

@@ -104,11 +104,12 @@
     (pa-start-stream stream-2)
     (sleep 0.5)
     (test-end))
+
+  ;; a 10-second tone  
+  (define longer-tone-buf (make-tone-buf 440 441000))
   
   ;; ending a stream with the abort-box
   (let ()
-    ;; a 10-second tone
-    (define longer-tone-buf (make-tone-buf 440 441000))
     (define info (make-sndplay-record longer-tone-buf))
     (define stream-1 (open-test-stream 
                       copying-callback
@@ -117,6 +118,21 @@
     (test-start)
     (pa-start-stream stream-1)
     (sleep 0.5)
+    (stop-sound info)
+    (test-end))
+  
+  ;; try stopping a sound 3 times:
+  (let ()
+    (define info (make-sndplay-record longer-tone-buf))
+    (define stream-1 (open-test-stream 
+                      copying-callback
+                      info))
+    (printf "1/2 second @ 440 Hz\n")
+    (test-start)
+    (pa-start-stream stream-1)
+    (sleep 0.5)
+    (stop-sound info)
+    (stop-sound info)
     (stop-sound info)
     (test-end))
   
