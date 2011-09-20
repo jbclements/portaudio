@@ -42,10 +42,15 @@
   
   ;; on different platforms, the results will be different....
   (check < 0 (pa-get-host-api-count))
+  (pa-get-host-api-count)
   (check <= 0 (pa-get-default-host-api))
+  (printf "default-host-api: ~v\n" (pa-get-default-host-api))
   (check-not-exn (lambda () (pa-get-host-api-info 0)))
   (check-exn exn:fail? 
              (lambda () (pa-get-host-api-info (+ 14 (pa-get-host-api-count)))))
+  
+  (printf "pa-version-text: ~s" (pa-get-version-text))
+  (printf "devices available: ~s\n" (pa-get-device-count))
   
 
   
@@ -204,7 +209,7 @@
     (set-box! abort-box #t)
     (test-end))
   
-  
+
   )))
 
 
