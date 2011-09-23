@@ -6,20 +6,22 @@
 
 (provide (all-defined-out))
 
-
+(define-runtime-path lib-path "lib")
 ;; use local copies of the libraries for Windows & Mac...
-(define-runtime-path win-dll-path "lib\\portaudio_x86")
-(define-runtime-path mac-dll-path "lib/libportaudio")
+(define win-dll-path (build-path lib-path (system-library-subpath) "portaudio"))
+(define mac-dll-path (build-path lib-path "portaudio"))
 
 (define libportaudio
   (case (system-type)
     [(windows) (ffi-lib win-dll-path)]
     [(macosx)  (with-handlers ()
                  (ffi-lib mac-dll-path '("2" "")))]
-    [(unix)    (with-handlers ([exn:fail? 
-                                (lambda (exn)
-                                  (error 'rsound "Note: on Linux, you need to install the libportaudio library yourself. Underlying error message: ~a" 
-                                         (exn-message exn)))])
+    [(unix)    (with-handlers 
+                   ([exn:fail? 
+                     (lambda (exn)
+                       (error 'rsound 
+                              "Note: on Linux, you need to install the libportaudio library yourself. Underlying error message: ~a" 
+                              (exn-message exn)))])
                  (ffi-lib "libportaudio" '("2.0.0" "")))]))
 
 ;; wrap a function to signal an error when an error code is returned.
