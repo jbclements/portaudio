@@ -17,40 +17,44 @@
  [make-sndplay-record (c-> s16vector? cpointer?)]
  [copying-callback cpointer?]
  [stop-sound (c-> cpointer? void?)]
- #;[make-generating-callback (c-> procedure? frames? channel? box? any)]
- #;[make-block-generating-callback (c-> procedure? channel? box? any)])
+ #;[make-streamplay-record (c-> procedure? cpointer?)]
+ #;[streaming-callback cpointer?])
 
 ;; all of these functions assume 2-channel-interleaved 16-bit input:
 (define channels 2)
 (define s16max 32767)
 (define s16-bytes 2)
 
-;; COPYING CALLBACKS
-
-(define-cstruct _rack-audio-closure
+;; COPYING CALLBACK STRUCT
+(define-cstruct _copied-sound-info
   ([sound         _pointer]
    [curSample     _ulong]
    [numSamples    _ulong]
    [stop-now      _bool]
    [stop-sema-ptr _pointer]))
 
-;; create a fresh rack-audio-closure structure, including a full
+;; STREAMING CALLBACK STRUCT
+(define-cstruct _streamed-sound-info
+  ([]))
+
+;; create a fresh copied-sound-info structure, including a full
 ;; malloc'ed copy of the sound data
 (define (make-sndplay-record s16vec)
-  (define finished-semaphore (make-semaphore))
-  ;; will never get freed....
-  ;; commenting this out until it stops seg faulting
-  #;(define immobile-cell (malloc-immobile-cell finished-semaphore))
-  (define closure
+  ;; will never get freed.... but 4 bytes lost should be okay.
+  (define already-freed? (malloc-immobile-cell #f))
+  (define sndplay-record
     (create-closure/raw (s16vector->cpointer s16vec) 
                         (s16vector-length s16vec)
-                        #f #;immobile-cell))
-  (unless closure
-    (error 'create-copying-closure
+                        already-freed?))
+  (unless sndplay-record
+    (error 'make-sndplay-record
            "failed to allocate space for ~s samples."
            (s16vector-length s16vec)))
-  (hash-set! sound-stopping-table closure (make-semaphore 1))
-  closure)
+  (hash-set! sound-stopping-table sndplay-record 
+             (list already-freed? (make-semaphore 1)
+                   (lambda ()
+                     (set-copied-sound-info-stop-now! sndplay-record #t))))
+  sndplay-record)
 
 ;; stop a sound
 ;; EFFECT: stops the sound *and frees the sndplay-record*, unless
@@ -58,10 +62,16 @@
 (define (stop-sound sndplay-record)
   (match (hash-ref sound-stopping-table sndplay-record #f)
     [#f (error 'stop-sound "record had no entry in the stopping table")]
-    [sema (match (semaphore-try-wait? sema)
-            ;; sound has already been stopped
-            [#f (void)]
-            [#t (set-rack-audio-closure-stop-now! sndplay-record #t)])]))
+    [(list already-freed? sema stop-thunk)
+     (match (semaphore-try-wait? sema)
+       ;; sound has already been stopped
+       [#f (void)]
+       [#t 
+        ;; for debugging only:
+        #;(printf "already freed: ~s\n"
+                  (ptr-ref already-freed? _scheme))        
+        (unless (ptr-ref already-freed? _scheme)
+          (stop-thunk))])]))
 
 ;; the library containing the C copying callbacks
 (define copying-callbacks-lib (ffi-lib (build-path lib
@@ -79,7 +89,7 @@
 
 (define create-closure/raw
   (get-ffi-obj "createClosure" copying-callbacks-lib
-               (_fun _pointer _ulong _pointer -> _rack-audio-closure-pointer)))
+               (_fun _pointer _ulong _pointer -> _copied-sound-info-pointer)))
 
 
 (define sound-stopping-table (make-weak-hash))

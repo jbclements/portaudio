@@ -141,6 +141,19 @@
     (stop-sound info)
     (test-end))
   
+  ;; try stopping a sound that's already stopped:
+  (let ()
+    (define info (make-sndplay-record tone-buf-380))
+    (define stream-1 (open-test-stream 
+                      copying-callback
+                      info))
+    (printf "1/2 second @ 380 Hz\n")
+    (test-start)
+    (pa-start-stream stream-1)
+    (sleep 1.0)
+    (stop-sound info)
+    (test-end))
+  
   ;; GENERATING CALLBACKS
   #;(let ()
     (define abort-box (box #f))

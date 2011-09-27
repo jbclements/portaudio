@@ -20,9 +20,12 @@
                    ([exn:fail? 
                      (lambda (exn)
                        (error 'rsound 
-                              "Note: on Linux, you need to install the libportaudio library yourself. Underlying error message: ~a" 
+                               linux-err-msg
                               (exn-message exn)))])
                  (ffi-lib "libportaudio" '("2.0.0" "")))]))
+
+(define linux-err-msg
+  "Note: on Linux, you need to install the libportaudio library yourself. Underlying error message: ~a")
 
 ;; wrap a function to signal an error when an error code is returned.
 ;; (any ... -> pa-error) -> (any ... -> )
@@ -1144,6 +1147,15 @@ typedef int PaStreamCallback(
 
 |#
 
+;; basically, using this is a bad idea.  The C callbacks 
+;; created using this type will wind up blocking on the 
+;; scheme thread, which can lead to deadlock if e.g.
+;; the scheme thread tries to destroy a stream while
+;; waiting.
+;;
+;; Instead, I'm using an explicit C callback that
+;; synchronizes loosely with racket code that fills
+;; buffers.
 (define _pa-stream-callback
   (_fun #:atomic? #t
         #:keep #t
