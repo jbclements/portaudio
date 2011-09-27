@@ -1,3 +1,5 @@
 compiled
 *~
 *.o
+doc
+planet-docs
