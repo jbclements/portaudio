@@ -103,6 +103,7 @@
                  1024
                  stream-info-2)
                 pa-continue)
+  (check-equal? (sound-stream-info-last-used stream-info-2) 1026)
   (for ([i (in-range (* channels 1024))])
     (check-equal? (s16vector-ref tgt i) 0))
   
@@ -114,6 +115,7 @@
                  1024
                  stream-info-2)
                 pa-continue)
+  (check-equal? (sound-stream-info-last-used stream-info-2) 1026)
   (let ()
     (define buf (array-ref (sound-stream-info-buffers stream-info-2) 2))
     (for ([i (in-range (* channels 1024))])
@@ -131,12 +133,6 @@
                          _scheme) 
                 #t)
 
-
-  
-  
-  
-  
-  3
 
   )))
 

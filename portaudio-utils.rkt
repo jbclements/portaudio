@@ -17,8 +17,12 @@
  [make-sndplay-record (c-> s16vector? cpointer?)]
  [copying-callback cpointer?]
  [stop-sound (c-> cpointer? void?)]
- [make-streamplay-record (c-> procedure? cpointer?)]
- #;[streaming-callback cpointer?])
+ [make-streamplay-record (c-> integer? cpointer?)]
+ [buffer-if-waiting (c-> cpointer? (or/c false? (list/c cpointer?
+                                                        integer?
+                                                        integer?
+                                                        procedure?)))]
+ [streaming-callback cpointer?])
 
 ;; all of these functions assume 2-channel-interleaved 16-bit input:
 (define channels 2)
@@ -37,11 +41,21 @@
 (define streambufs 4)
 (define-cstruct _sound-stream-info
   ([buffer-frames _int]
+   ;; the buffers used by the filling process:
    [buffers (_array _pointer streambufs)]
+   ;; the index of the buffer last placed
+   ;; in this slot by the filling process:
    [buf-numbers (_array _int streambufs)]
+   ;; the index of the buffer last copied
+   ;; out by the callback:
    [last-used _int]
+   ;; set this int to 1 to halt playback:
    [stop-now _int]
+   ;; pointer to an immutable cell, the callback
+   ;; sets this to #t when the record is free'd.
    [already-stopped? _pointer]))
+
+
 
 #|typedef struct soundStreamInfo{
   int   bufferFrames;
@@ -96,6 +110,29 @@
                       #t))))
   streamplay-record)
 
+;; if a buffer needs to be filled, return the info needed to fill it
+(define (buffer-if-waiting stream-info)
+  (define next-to-be-used (add1 (sound-stream-info-last-used stream-info)))
+  (define buf-numbers (sound-stream-info-buf-numbers stream-info))
+  (define buffer-index (modulo next-to-be-used streambufs))
+  (cond [(= (array-ref buf-numbers buffer-index)
+            next-to-be-used)
+         ;; already present:
+         #f]
+        [else (list 
+               ;; the pointer to the next buffer:
+               (array-ref (sound-stream-info-buffers stream-info)
+                          buffer-index)
+               ;; the length of the buffer:
+               (sound-stream-info-buffer-frames stream-info)
+               ;; the index of the next buffer:
+               next-to-be-used
+               ;; a thunk to use to indicate it's ready:
+               (lambda ()
+                 (array-set! buf-numbers
+                             buffer-index
+                             next-to-be-used)))]))
+
 ;; stop a sound
 ;; EFFECT: stops the sound *and frees the sndplay-record*, unless
 ;; it's already done.
@@ -147,109 +184,3 @@
 
 (define sound-stopping-table (make-weak-hash))
 
-
-#|
-;; create a callback that creates frames by calling a signal repeatedly.
-;; note that we don't bother checking to see whether the buffer is successfully
-;; filled.
-(define (make-generating-callback signal buffer-frames response-channel abort-box)
-  (define signal-exn-box (box #f))
-  (define-values (filled-buffer semaphore)
-    (start-filler-thread signal buffer-frames signal-exn-box abort-box))
-  (define buffer-samples (* buffer-frames channels))
-  ;; allow the first buffer-fill to happen:
-  (semaphore-post semaphore)
-  (define callback-holding-box (box #f))
-  (define (the-callback input output frame-count time-info status-flags user-data)
-    ;; the following code is believed not to be able to raise any errors.
-    ;; if this is wrong, racket will die with abort().
-    
-    ;; don't run if abort is set:
-    (cond [(unbox abort-box)
-           (define response
-             (or (unbox signal-exn-box) 'finished))
-           (channel-put/async response-channel response)
-           (set-box! callback-holding-box #f)
-           'pa-abort]
-          ;; don't run if we get the wrong number of frames requested:
-          [(not (= frame-count buffer-frames))
-           (channel-put/async
-            response-channel
-            (exn:fail
-             (format
-              "make-generating-callback: callback wanted ~s frames instead of expected ~s." 
-              frame-count
-              buffer-frames)
-             (current-continuation-marks)))
-           (set-box! callback-holding-box #f)
-           'pa-abort]
-          ;; otherwise, copy and release the semaphore to generate again.
-          [else
-           (memcpy output
-                   0
-                   filled-buffer
-                   0
-                   buffer-samples
-                   _sint16)
-           (semaphore-post semaphore)
-           'pa-continue]))
-  (set-box! callback-holding-box the-callback)
-  the-callback)
-
-
-;; this thread is not run as a callback. That way, if the user's signal
-;; misbehaves, it won't destroy the audio engine. It fills 
-;; the output buffer once for each post to the semaphore.
-(define (start-filler-thread signal buffer-frames signal-exn-box abort-box)
-  (define signal-semaphore (make-semaphore))
-  (define buffer (make-s16vector (* channels buffer-frames)))
-  (define cpointer (s16vector->cpointer buffer))
-  (define frame-offset 0)
-  (thread
-   (lambda ()
-     (let loop ()
-       (semaphore-wait signal-semaphore)
-       (with-handlers ([(lambda (exn) #t)
-                        (lambda (exn)
-                          (set-box! signal-exn-box exn)
-                          (set-box! abort-box #t)
-                          ;; fall off the end of the thread:
-                          (void))])
-         (for ([t (in-range frame-offset (+ frame-offset buffer-frames))]
-               [i (in-range 0 (* 2 buffer-frames) 2)])
-           (define sample 
-             (inexact->exact 
-              (round (* s16max (min 1.0 (max -1.0 (signal t)))))))
-           (ptr-set! cpointer _sint16 i sample)
-           (ptr-set! cpointer _sint16 (+ i 1) sample))
-         (set! frame-offset (+ frame-offset buffer-frames))
-         (loop)))))
-  (values cpointer signal-semaphore))
-
-;; create a callback that creates frames by passing a cblock to a function
-(define (make-block-generating-callback signal/block/s16 response-channel abort-box)
-  (define frame-offset 0)
-  (define callback-holding-box (box #f))
-  (define (the-callback input output frame-count time-info status-flags user-data)
-    (cond [(unbox abort-box) 'pa-abort]
-          ;; MUST NOT ALLOW AN EXCEPTION TO ESCAPE.
-          [else (with-handlers ([(lambda (exn) #t)
-                                 (lambda (exn)
-                                   (channel-put/async response-channel exn)
-                                   'pa-abort)])
-                  (define keep-running? 
-                    (signal/block/s16 output frame-offset frame-count))
-                  (set! frame-offset (+ frame-offset frame-count))
-                  (cond [keep-running? 'pa-continue]
-                        [else (channel-put/async response-channel 'finished)
-                              (set-box! callback-holding-box #f)
-                              'pa-complete]))]))
-  (set-box! callback-holding-box the-callback)
-  the-callback)
-
-;; we need to hold on to the callbacks, so they don't get collected while
-;; the streams are still being processed.
-(define callback-boxes (list))
-
-
-|#

@@ -172,14 +172,14 @@ int streamingCallback(
   if (ssi->bufNumbers[modCounter] == nextBufNum) {
     // yes, do the copy:
     memcpy(output,(void *)ssi->buffers[modCounter],bufferBytes);
-    ssi->lastUsed = nextBufNum;
-    // if using synchronization, trigger here....
-    return(paContinue);
   } else {
     // no, just use silence:
     memset(output,0,bufferBytes);
-    return(paContinue);
   }
+  ssi->lastUsed = nextBufNum;
+  // if using synchronization, trigger here....
+  return(paContinue);
+
 }
 
 // clean up when done:  free the sound data and the
