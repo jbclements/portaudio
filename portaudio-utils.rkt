@@ -17,7 +17,7 @@
  [make-sndplay-record (c-> s16vector? cpointer?)]
  [copying-callback cpointer?]
  [stop-sound (c-> cpointer? void?)]
- #;[make-streamplay-record (c-> procedure? cpointer?)]
+ [make-streamplay-record (c-> procedure? cpointer?)]
  #;[streaming-callback cpointer?])
 
 ;; all of these functions assume 2-channel-interleaved 16-bit input:
@@ -34,8 +34,26 @@
    [stop-sema-ptr _pointer]))
 
 ;; STREAMING CALLBACK STRUCT
-(define-cstruct _streamed-sound-info
-  ([]))
+(define streambufs 4)
+(define-cstruct _sound-stream-info
+  ([buffer-frames _int]
+   [buffers (_array _pointer streambufs)]
+   [buf-numbers (_array _int streambufs)]
+   [last-used _int]
+   [stop-now _int]
+   [already-stopped? _pointer]))
+
+#|typedef struct soundStreamInfo{
+  int   bufferFrames;
+  short *buffers[STREAMBUFS];
+  // mutated by racket only:
+  int   bufNumbers[STREAMBUFS];
+  // mutated by callback only:
+  int   lastUsed;
+  int   stopNow;
+  Scheme_Object **stoppedPtr;
+} soundStreamInfo;
+|#
 
 ;; create a fresh copied-sound-info structure, including a full
 ;; malloc'ed copy of the sound data
@@ -56,6 +74,28 @@
                      (set-copied-sound-info-stop-now! sndplay-record #t))))
   sndplay-record)
 
+;; create a fresh streaming-sound-info structure, including
+;; four buffers to be used in rendering the sound.
+(define (make-streamplay-record buffer-frames)
+  ;; will never get freed.... but 4 bytes lost should be okay.
+  (define already-freed? (malloc-immobile-cell #f))
+  (define streamplay-record
+    (create-streamplay-record/raw 
+     buffer-frames
+     already-freed?))
+  (unless streamplay-record
+    (error 'make-streamplay-record
+           "failed to allocate space for streamplay buffer, ~sx~s frames."
+           streambufs
+           buffer-frames))
+  (hash-set! sound-stopping-table streamplay-record
+             (list already-freed? (make-semaphore 1)
+                   (lambda ()
+                     (set-sound-stream-info-stop-now! 
+                      streamplay-record
+                      #t))))
+  streamplay-record)
+
 ;; stop a sound
 ;; EFFECT: stops the sound *and frees the sndplay-record*, unless
 ;; it's already done.
@@ -73,28 +113,39 @@
         (unless (ptr-ref already-freed? _scheme)
           (stop-thunk))])]))
 
+
+;; FFI OBJECTS FROM THE C CALLBACK LIBRARY
+
+
 ;; the library containing the C copying callbacks
 (define copying-callbacks-lib (ffi-lib (build-path lib
                                                    (system-library-subpath)
                                                    "copying-callbacks")))
 
-;; in order to get a raw pointer to pass back to C, we declare 
-;; the function pointer as being a simple struct:
-(define-cstruct _bogus-struct
-  ([datum _uint16]))
-
-(define copying-callback
-  (get-ffi-obj "copyingCallback"
-               copying-callbacks-lib _bogus-struct))
-
 (define create-closure/raw
   (get-ffi-obj "createClosure" copying-callbacks-lib
                (_fun _pointer _ulong _pointer -> _copied-sound-info-pointer)))
 
+(define create-streamplay-record/raw
+  (get-ffi-obj "createSoundStreamInfo" copying-callbacks-lib
+               (_fun _int _pointer -> _sound-stream-info-pointer)))
+
+;; in order to get a raw pointer to pass back to C, we declare 
+;; the function pointers as being simple structs:
+(define-cstruct _bogus-struct
+  ([datum _uint16]))
+
+(define copying-callback
+  (get-ffi-obj "copyingCallback"   copying-callbacks-lib _bogus-struct))
+
+(define streaming-callback
+  (get-ffi-obj "streamingCallback" copying-callbacks-lib _bogus-struct))
+
+;; DON'T IMPORT THE FREE FUNCTIONS... they should only be called by C.
+
+
 
 (define sound-stopping-table (make-weak-hash))
-
-
 
 
 #|
