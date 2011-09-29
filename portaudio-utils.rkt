@@ -22,7 +22,8 @@
                                                         integer?
                                                         integer?
                                                         procedure?)))]
- [streaming-callback cpointer?])
+ [streaming-callback cpointer?]
+ [stream-fails (c-> cpointer? integer?)])
 
 ;; all of these functions assume 2-channel-interleaved 16-bit input:
 (define channels 2)
@@ -53,7 +54,14 @@
    [stop-now _int]
    ;; pointer to an immutable cell, the callback
    ;; sets this to #t when the record is free'd.
-   [already-stopped? _pointer]))
+   [already-stopped? _pointer]
+   ;; number of faults:
+   [fault-count _int]))
+
+
+;; how many fails have occurred on the stream?
+(define (stream-fails sound-stream-info)
+  (sound-stream-info-fault-count sound-stream-info))
 
 
 

@@ -38,7 +38,8 @@
      [buf-numbers (_array _int streambufs)]
      [last-used _int]
      [stop-now _int]
-     [already-stopped? _pointer]))
+     [already-stopped? _pointer]
+     [fault-count _int]))
   
   (define streaming-callback
     (get-ffi-obj "streamingCallback"
@@ -73,6 +74,7 @@
   (check-equal? (ptr-ref (sound-stream-info-already-stopped? stream-info)
                          _scheme)
                 #f)
+  (check-equal? (sound-stream-info-fault-count stream-info) 0)
   
   ;; randomize all the buffers
   (for ([i (in-range streambufs)])
@@ -104,6 +106,7 @@
                  stream-info-2)
                 pa-continue)
   (check-equal? (sound-stream-info-last-used stream-info-2) 1026)
+  (check-equal? (sound-stream-info-fault-count stream-info-2) 1)
   (for ([i (in-range (* channels 1024))])
     (check-equal? (s16vector-ref tgt i) 0))
   

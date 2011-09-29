@@ -24,6 +24,7 @@ typedef struct soundStreamInfo{
   int   lastUsed;
   int   stopNow;
   Scheme_Object **stoppedPtr;
+  int   faultCount;
 } soundStreamInfo;
 
 #define CHANNELS 2
@@ -90,6 +91,7 @@ soundStreamInfo *createSoundStreamInfo(int framesPerBuffer,
   result->lastUsed = -1;
   result->stopNow = 0;
   result->stoppedPtr = stoppedPtr;
+  result->faultCount = 0;
 
   return (result);
 }
@@ -175,6 +177,8 @@ int streamingCallback(
   } else {
     // no, just use silence:
     memset(output,0,bufferBytes);
+    // increment the fault count:
+    ssi->faultCount += 1;
   }
   ssi->lastUsed = nextBufNum;
   // if using synchronization, trigger here....

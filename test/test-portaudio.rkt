@@ -87,11 +87,17 @@
     (define abort-box (box #f))
     (define callback-info (make-sndplay-record tone-buf-330))
     (define stream (open-test-stream copying-callback callback-info))
+    (check-equal? (pa-stream-stopped? stream) #t)
+    (check-equal? (pa-stream-active? stream) #f)
     (printf "1/2 second @ 330 Hz\n")
     (test-start)
     (pa-start-stream stream)
+    (check-equal? (pa-stream-stopped? stream) #f)
+    (check-equal? (pa-stream-active? stream) #t)
+    (check-true (not (= 0.0 (pa-get-stream-time stream))))
     (sleep 0.5)
-    (test-end))
+    (test-end)
+    (check-equal? (pa-stream-active? stream) #f))
   
   (define tone-buf-380 (make-tone-buf 380 22050))
   
@@ -124,6 +130,8 @@
     (pa-start-stream stream-1)
     (sleep 0.5)
     (stop-sound info)
+    (sleep 0.1)
+    (check-equal? (pa-stream-active? stream-1) #f)
     (test-end))
   
   ;; try stopping a sound 3 times:

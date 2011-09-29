@@ -36,6 +36,7 @@
 
   (define log-counter 0)
   (define log empty)
+  (define log2 empty)
   
   (define srinv (exact->inexact (/ 1 44100)))
   (define (fill-buf ptr frames index)
@@ -49,16 +50,20 @@
       (define sample (inexact->exact (round (* 32767 (* 0.2 (sin (* twopi t 403)))))))
       (define sample-idx (* channels i))
       (ptr-set! ptr _sint16 sample-idx sample)
-      (ptr-set! ptr _sint16 (add1 sample-idx) sample)))
+      (ptr-set! ptr _sint16 (add1 sample-idx) sample))
+    (sleep 0.015))
   
+  ;; return #t if a buffer got written
   (define (maybe-fill-buf streaming-info-ptr)
-    (printf "~s\n" (buffer-if-waiting streaming-info-ptr))
     (match (buffer-if-waiting streaming-info-ptr)
-      [#f (void)]
+      [#f (set! log (cons '_ log))
+          #f]
       [(list ptr frames idx finished-thunk)
+       (set! log (cons 1 log))
        (set! log-counter (+ log-counter 1))
        (fill-buf ptr frames idx)
-       (finished-thunk)]))
+       (finished-thunk)
+       #t]))
   
   (let ()
     ;; map 0<rads<2pi to -pi/2<rads<pi/2
@@ -99,20 +104,32 @@
                                      stream-info
                                      buffer-frames))
     (printf "tone at 403 Hz\n")
-    (define wake-delay (/ (/ 1 (/ 44100 1024)) 2))
+    (define wake-delay (* 1/4 (/ 1 (/ 44100 1024))))
     (define filling-thread
       (thread
        (lambda ()
-         (for ([i (in-range 100)])
+         (maybe-fill-buf stream-info)
+         (for ([i (in-range 1000)])
+           (define pre-time (pa-get-stream-time stream))
            (maybe-fill-buf stream-info)
-           (sleep wake-delay)))))
+           (define post-time (pa-get-stream-time stream))
+           (define time-taken (- post-time pre-time))
+           (set! log2 (cons (max 0.001 (- wake-delay time-taken)) log2))
+           #;(sleep wake-delay)
+           (when (< 0 (- wake-delay time-taken))
+               (sleep (- wake-delay time-taken)))
+           #;(sleep (max 0.000 (- wake-delay time-taken)))))))
     (sleep 0.5)      
     (test-start)
     (pa-start-stream stream)
     (sleep 1.0)
     (pa-stop-stream stream)
     (test-end)
-    (check-equal? log-counter 43))
+    (kill-thread filling-thread)
+    (printf "log2: \n~s\n" log2)
+    (printf "log: \n~s\n" log)
+    (printf "fails: ~s\n" (stream-fails stream-info))
+    (check-equal? log-counter 44))
   
   
   ;; first test with the vector interface:

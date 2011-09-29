@@ -281,7 +281,7 @@ PaError Pa_Initialize( void );
 
 (define-checked pa-initialize 
   (get-ffi-obj "Pa_Initialize" 
-               libportaudio(_fun -> _pa-error)
+               libportaudio
                (_fun -> _pa-error)))
 
 #|
@@ -1334,7 +1334,7 @@ PaError Pa_CloseStream( PaStream *stream );
 
 #|
 
-/** Functions of type PaStreamFinishedCallback are implemented by PortAudio 
+/** Functions of type PaStreamFinishedCallback are implemented by PortAudio 
  clients. They can be registered with a stream using the Pa_SetStreamFinishedCallback
  function. Once registered they are called when the stream becomes inactive
  (ie once a call to Pa_StopStream() will not block).
@@ -1401,8 +1401,6 @@ PaError Pa_StopStream( PaStream *stream );
 PaError Pa_AbortStream( PaStream *stream );
 |#
 
-;; *** UNTESTED ***:
-
 (define-checked pa-abort-stream
   (get-ffi-obj "Pa_AbortStream"
                libportaudio
@@ -1425,6 +1423,19 @@ PaError Pa_AbortStream( PaStream *stream );
  @see Pa_StopStream, Pa_AbortStream, Pa_IsStreamActive
 */
 PaError Pa_IsStreamStopped( PaStream *stream );
+|#
+
+;; untested:
+(define pa-stream-stopped?
+  (get-ffi-obj "Pa_IsStreamStopped"
+               libportaudio
+               (_fun _pa-stream 
+                     -> (result : _int)
+                     -> (cond [(= result 0) #f]
+                              [(= result 1) #t]
+                              [else (error (pa-get-error-text/int result))]))))
+
+#|
 
 
 /** Determine whether the stream is active.
@@ -1441,7 +1452,17 @@ PaError Pa_IsStreamStopped( PaStream *stream );
  @see Pa_StopStream, Pa_AbortStream, Pa_IsStreamStopped
 */
 PaError Pa_IsStreamActive( PaStream *stream );
-
+|#
+;; untested:
+(define pa-stream-active?
+  (get-ffi-obj "Pa_IsStreamActive"
+               libportaudio
+               (_fun _pa-stream 
+                     -> (result : _int)
+                     -> (cond [(= result 0) #f]
+                              [(= result 1) #t]
+                              [else (error (pa-get-error-text/int result))]))))
+#|
 
 
 /** A structure containing unchanging information about an open stream.
@@ -1513,6 +1534,18 @@ const PaStreamInfo* Pa_GetStreamInfo( PaStream *stream );
  @see PaTime, PaStreamCallback, PaStreamCallbackTimeInfo
 */
 PaTime Pa_GetStreamTime( PaStream *stream );
+|#
+
+(define pa-get-stream-time
+  (get-ffi-obj "Pa_GetStreamTime"
+               libportaudio
+               (_fun _pa-stream 
+                     -> (result : _pa-time)
+                     -> (cond [(= 0.0 result) 
+                               (error 'pa-get-stream-time
+                                      "unsuccessful")]
+                              [else result]))))
+#|
 
 
 /** Retrieve CPU usage information for the specified stream.
