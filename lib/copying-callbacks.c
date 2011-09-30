@@ -25,6 +25,7 @@ typedef struct soundStreamInfo{
   int   stopNow;
   Scheme_Object **stoppedPtr;
   int   faultCount;
+  mzrt_sema *bufferNeeded;
 } soundStreamInfo;
 
 #define CHANNELS 2
@@ -66,35 +67,6 @@ soundCopyingInfo *createClosure(short *data,
   }
 }
 
-// allocate a soundStreamInfo, and its accompanying buffers
-soundStreamInfo *createSoundStreamInfo(int framesPerBuffer,
-                                       Scheme_Object **stoppedPtr) {
-  size_t bufferBytes = (SAMPLEBYTES * CHANNELS * framesPerBuffer);
-  soundStreamInfo *result;
-  int i;
-
-  result = (soundStreamInfo *)malloc(sizeof(soundStreamInfo));
-  if (result == NULL) {
-    fprintf(stderr,"couldn't allocate space for sound stream Info");
-    exit(1);
-  }
-  result->bufferFrames = framesPerBuffer;
-
-  for (i = 0; i < STREAMBUFS; i++) {
-    result->buffers[i] = (short *)malloc(bufferBytes);
-    if (result->buffers[i] == NULL) {
-      fprintf(stderr,"couldn't allocate %ld bytes for sound buffer",bufferBytes);
-      exit(1);
-    }
-    result->bufNumbers[i] = -1;
-  }
-  result->lastUsed = -1;
-  result->stopNow = 0;
-  result->stoppedPtr = stoppedPtr;
-  result->faultCount = 0;
-
-  return (result);
-}
 
 
 // simplest possible feeder; copy bytes until you run out.

@@ -40,7 +40,7 @@
 
 ;; STREAMING CALLBACK STRUCT
 (define streambufs 4)
-(define-cstruct _sound-stream-info
+(define-cstruct _stream-rec
   ([buffer-frames _int]
    ;; the buffers used by the filling process:
    [buffers (_array _pointer streambufs)]
@@ -56,26 +56,15 @@
    ;; sets this to #t when the record is free'd.
    [already-stopped? _pointer]
    ;; number of faults:
-   [fault-count _int]))
+   [fault-count _int]
+   ;; an mzrt-sema used to signal 
+   ;; when data is needed
+   [buffer-needed-sema _pointer]))
 
 
 ;; how many fails have occurred on the stream?
-(define (stream-fails sound-stream-info)
-  (sound-stream-info-fault-count sound-stream-info))
-
-
-
-#|typedef struct soundStreamInfo{
-  int   bufferFrames;
-  short *buffers[STREAMBUFS];
-  // mutated by racket only:
-  int   bufNumbers[STREAMBUFS];
-  // mutated by callback only:
-  int   lastUsed;
-  int   stopNow;
-  Scheme_Object **stoppedPtr;
-} soundStreamInfo;
-|#
+(define (stream-fails stream-rec)
+  (stream-rec-fault-count stream-rec))
 
 ;; create a fresh copied-sound-info structure, including a full
 ;; malloc'ed copy of the sound data
@@ -101,27 +90,30 @@
 (define (make-streamplay-record buffer-frames)
   ;; will never get freed.... but 4 bytes lost should be okay.
   (define already-freed? (malloc-immobile-cell #f))
-  (define streamplay-record
-    (create-streamplay-record/raw 
-     buffer-frames
-     already-freed?))
-  (unless streamplay-record
-    (error 'make-streamplay-record
-           "failed to allocate space for streamplay buffer, ~sx~s frames."
-           streambufs
-           buffer-frames))
+  (define info (malloc _streamplay-record 'raw))
+  (set-stream-rec-buffer-frames! buffer-frames)
+  (for ([i (in-range streambufs)])
+    (array-set! (stream-rec-buffers) 
+                i
+                (malloc _sint16 (* buffer-frames channels) 'raw))
+    (array-set! (stream-rec-buffer-nums) i -1))
+  (set-stream-rec-last-used! rec -1)
+  (set-stream-rec-stop-now! rec 0)
+  (set-stream-rec-stoppedPtr! already-freed?)
+  (set-stream-rec-fault-count! 0)
+  (set-stream-rec-buffer-needed! (mzrt-sema-create 0))
   (hash-set! sound-stopping-table streamplay-record
              (list already-freed? (make-semaphore 1)
                    (lambda ()
-                     (set-sound-stream-info-stop-now! 
+                     (set-stream-rec-stop-now! 
                       streamplay-record
                       #t))))
   streamplay-record)
 
 ;; if a buffer needs to be filled, return the info needed to fill it
 (define (buffer-if-waiting stream-info)
-  (define next-to-be-used (add1 (sound-stream-info-last-used stream-info)))
-  (define buf-numbers (sound-stream-info-buf-numbers stream-info))
+  (define next-to-be-used (add1 (stream-rec-last-used stream-info)))
+  (define buf-numbers (stream-rec-buf-numbers stream-info))
   (define buffer-index (modulo next-to-be-used streambufs))
   (cond [(= (array-ref buf-numbers buffer-index)
             next-to-be-used)
@@ -129,10 +121,10 @@
          #f]
         [else (list 
                ;; the pointer to the next buffer:
-               (array-ref (sound-stream-info-buffers stream-info)
+               (array-ref (stream-rec-buffers stream-info)
                           buffer-index)
                ;; the length of the buffer:
-               (sound-stream-info-buffer-frames stream-info)
+               (stream-rec-buffer-frames stream-info)
                ;; the index of the next buffer:
                next-to-be-used
                ;; a thunk to use to indicate it's ready:
@@ -173,7 +165,7 @@
 
 (define create-streamplay-record/raw
   (get-ffi-obj "createSoundStreamInfo" copying-callbacks-lib
-               (_fun _int _pointer -> _sound-stream-info-pointer)))
+               (_fun _int _pointer -> _stream-rec-pointer)))
 
 ;; in order to get a raw pointer to pass back to C, we declare 
 ;; the function pointers as being simple structs:
