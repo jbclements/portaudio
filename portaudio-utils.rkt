@@ -51,10 +51,10 @@
    ;; out by the callback:
    [last-used _int]
    ;; set this int to 1 to halt playback:
-   [stop-now _int]
+   [stop-now _bool]
    ;; pointer to an immutable cell, the callback
    ;; sets this to #t when the record is free'd.
-   [already-stopped? _pointer]
+   [already-freed? _pointer]
    ;; number of faults:
    [fault-count _int]
    ;; an mzrt-sema used to signal 
@@ -90,25 +90,25 @@
 (define (make-streamplay-record buffer-frames)
   ;; will never get freed.... but 4 bytes lost should be okay.
   (define already-freed? (malloc-immobile-cell #f))
-  (define info (malloc _streamplay-record 'raw))
-  (set-stream-rec-buffer-frames! buffer-frames)
+  (define info (cast (malloc _stream-rec 'raw)
+                     _pointer
+                     _stream-rec-pointer))
+  (set-stream-rec-buffer-frames! info buffer-frames)
   (for ([i (in-range streambufs)])
-    (array-set! (stream-rec-buffers) 
+    (array-set! (stream-rec-buffers info) 
                 i
                 (malloc _sint16 (* buffer-frames channels) 'raw))
-    (array-set! (stream-rec-buffer-nums) i -1))
-  (set-stream-rec-last-used! rec -1)
-  (set-stream-rec-stop-now! rec 0)
-  (set-stream-rec-stoppedPtr! already-freed?)
-  (set-stream-rec-fault-count! 0)
-  (set-stream-rec-buffer-needed! (mzrt-sema-create 0))
-  (hash-set! sound-stopping-table streamplay-record
+    (array-set! (stream-rec-buf-numbers info) i -1))
+  (set-stream-rec-last-used! info -1)
+  (set-stream-rec-stop-now! info 0)
+  (set-stream-rec-already-freed?! info already-freed?)
+  (set-stream-rec-fault-count! info 0)
+  (set-stream-rec-buffer-needed-sema! info (mzrt-sema-create 0))
+  (hash-set! sound-stopping-table info
              (list already-freed? (make-semaphore 1)
                    (lambda ()
-                     (set-stream-rec-stop-now! 
-                      streamplay-record
-                      #t))))
-  streamplay-record)
+                     (set-stream-rec-stop-now! info #t))))
+  info)
 
 ;; if a buffer needs to be filled, return the info needed to fill it
 (define (buffer-if-waiting stream-info)
@@ -163,10 +163,6 @@
   (get-ffi-obj "createClosure" copying-callbacks-lib
                (_fun _pointer _ulong _pointer -> _copied-sound-info-pointer)))
 
-(define create-streamplay-record/raw
-  (get-ffi-obj "createSoundStreamInfo" copying-callbacks-lib
-               (_fun _int _pointer -> _stream-rec-pointer)))
-
 ;; in order to get a raw pointer to pass back to C, we declare 
 ;; the function pointers as being simple structs:
 (define-cstruct _bogus-struct
@@ -179,6 +175,46 @@
   (get-ffi-obj "streamingCallback" copying-callbacks-lib _bogus-struct))
 
 ;; DON'T IMPORT THE FREE FUNCTIONS... they should only be called by C.
+
+
+;; FFI OBJECTS FROM THE SCHEME LIBRARY
+
+(define schemelib (ffi-lib #f))
+
+(define-cpointer-type _mzrt-semaphore)
+
+(define mzrt-sema-create
+  (get-ffi-obj "mzrt_sema_create"
+               #f
+               (_fun (sema-ptr : (_ptr o _mzrt-semaphore))
+                     _int
+                     -> (err-code : _int)
+                     -> (cond [(= err-code 0) sema-ptr]
+                              [else (error 'mzrt-sema-create
+                                           (format "error number ~s"
+                                                   err-code))]))))
+
+(define mzrt-sema-wait
+  (get-ffi-obj "mzrt_sema_wait"
+               #f
+               (_fun _mzrt-semaphore
+                     _int
+                     -> (err-code : _int)
+                     -> (cond [(= err-code 0) (void)]
+                              [else (error 'mzrt-sema-wait
+                                           (format "error number ~s"
+                                                   err-code))]))))
+
+(define mzrt-sema-post
+  (get-ffi-obj "mzrt_sema_post"
+               #f
+               (_fun _mzrt-semaphore
+                     _int
+                     -> (err-code : _int)
+                     -> (cond [(= err-code 0) (void)]
+                              [else (error 'mzrt-sema-post
+                                           (format "error number ~s"
+                                                   err-code))]))))
 
 
 
