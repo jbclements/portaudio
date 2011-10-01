@@ -3,7 +3,9 @@
 (require ffi/vector
          ffi/unsafe
          (rename-in racket/contract [-> c->])
-         racket/runtime-path)
+         racket/runtime-path
+         "mzrt-sema.rkt"
+         "signalling.rkt")
 
 (define-runtime-path lib "lib/")
 
@@ -17,7 +19,7 @@
  [make-sndplay-record (c-> s16vector? cpointer?)]
  [copying-callback cpointer?]
  [stop-sound (c-> cpointer? void?)]
- [make-streamplay-record (c-> integer? cpointer?)]
+ [make-streamplay-record (c-> integer? (list/c cpointer? place?))]
  [buffer-if-waiting (c-> cpointer? (or/c false? (list/c cpointer?
                                                         integer?
                                                         integer?
@@ -90,6 +92,7 @@
 (define (make-streamplay-record buffer-frames)
   ;; will never get freed.... but 4 bytes lost should be okay.
   (define already-freed? (malloc-immobile-cell #f))
+  (define mzrt-sema (mzrt-sema-create 0))
   (define info (cast (malloc _stream-rec 'raw)
                      _pointer
                      _stream-rec-pointer))
@@ -100,15 +103,17 @@
                 (malloc _sint16 (* buffer-frames channels) 'raw))
     (array-set! (stream-rec-buf-numbers info) i -1))
   (set-stream-rec-last-used! info -1)
-  (set-stream-rec-stop-now! info 0)
+  (set-stream-rec-stop-now! info #f)
   (set-stream-rec-already-freed?! info already-freed?)
   (set-stream-rec-fault-count! info 0)
-  (set-stream-rec-buffer-needed-sema! info (mzrt-sema-create 0))
+  (set-stream-rec-buffer-needed-sema! info mzrt-sema)
   (hash-set! sound-stopping-table info
              (list already-freed? (make-semaphore 1)
                    (lambda ()
                      (set-stream-rec-stop-now! info #t))))
-  info)
+  (define listening-place (mzrt-sema-listener mzrt-sema))
+  (list info listening-place))
+
 
 ;; if a buffer needs to be filled, return the info needed to fill it
 (define (buffer-if-waiting stream-info)
@@ -175,46 +180,6 @@
   (get-ffi-obj "streamingCallback" copying-callbacks-lib _bogus-struct))
 
 ;; DON'T IMPORT THE FREE FUNCTIONS... they should only be called by C.
-
-
-;; FFI OBJECTS FROM THE SCHEME LIBRARY
-
-(define schemelib (ffi-lib #f))
-
-(define-cpointer-type _mzrt-semaphore)
-
-(define mzrt-sema-create
-  (get-ffi-obj "mzrt_sema_create"
-               #f
-               (_fun (sema-ptr : (_ptr o _mzrt-semaphore))
-                     _int
-                     -> (err-code : _int)
-                     -> (cond [(= err-code 0) sema-ptr]
-                              [else (error 'mzrt-sema-create
-                                           (format "error number ~s"
-                                                   err-code))]))))
-
-(define mzrt-sema-wait
-  (get-ffi-obj "mzrt_sema_wait"
-               #f
-               (_fun _mzrt-semaphore
-                     _int
-                     -> (err-code : _int)
-                     -> (cond [(= err-code 0) (void)]
-                              [else (error 'mzrt-sema-wait
-                                           (format "error number ~s"
-                                                   err-code))]))))
-
-(define mzrt-sema-post
-  (get-ffi-obj "mzrt_sema_post"
-               #f
-               (_fun _mzrt-semaphore
-                     _int
-                     -> (err-code : _int)
-                     -> (cond [(= err-code 0) (void)]
-                              [else (error 'mzrt-sema-post
-                                           (format "error number ~s"
-                                                   err-code))]))))
 
 
 

@@ -1,6 +1,7 @@
 #lang racket
 
 (require "helpers.rkt"
+         "../portaudio-utils.rkt"
          ffi/unsafe
          ffi/vector
          rackunit
@@ -32,7 +33,7 @@
 } soundStreamInfo;|#
 
   (define streambufs 4)
-  (define-cstruct _sound-stream-info
+  (define-cstruct _stream-rec
     ([buffer-frames _int]
      [buffers (_array _pointer streambufs)]
      [buf-numbers (_array _int streambufs)]
@@ -50,35 +51,32 @@
                   _ulong
                   (_pointer = #f)
                   (_ulong = 0)
-                  _sound-stream-info-pointer
+                  _stream-rec-pointer
                   -> _int)))
   
-  (define create-stream-info
-    (get-ffi-obj "createSoundStreamInfo"
-                 callback-lib
-                 (_fun _int _pointer -> _sound-stream-info-pointer)))
   
-  (define stream-info (create-stream-info 
-                       1024
-                       (malloc-immobile-cell #f)))
+  (match-define
+    (list stream-info mzrt-sema) 
+    (make-streamplay-record 1024))
   
-  (check-equal? (sound-stream-info-buffer-frames stream-info)
+  (check-equal? (stream-rec-buffer-frames stream-info)
                 1024)
-  (check-equal? (sound-stream-info-last-used stream-info) -1)
-  (check-equal? (sound-stream-info-stop-now stream-info) 0)
+  (check-equal? (stream-rec-last-used stream-info) -1)
+  (check-equal? (stream-rec-stop-now stream-info) 0)
   (check-equal? (for/list ([i (in-range streambufs)])
-                  (array-ref (sound-stream-info-buf-numbers
+                  (array-ref (stream-rec-buf-numbers
                               stream-info)
                              i))
                 '(-1 -1 -1 -1))
-  (check-equal? (ptr-ref (sound-stream-info-already-stopped? stream-info)
+  (check-equal? (ptr-ref (stream-rec-already-stopped? 
+                          stream-info)
                          _scheme)
                 #f)
-  (check-equal? (sound-stream-info-fault-count stream-info) 0)
+  (check-equal? (stream-rec-fault-count stream-info) 0)
   
   ;; randomize all the buffers
   (for ([i (in-range streambufs)])
-    (define buf (array-ref (sound-stream-info-buffers stream-info) i))
+    (define buf (array-ref (stream-rec-buffers stream-info) i))
     (for ([j (in-range (* channels 1024))])
       (ptr-set! buf _sint16 j (random 100))))
   (define tgt (make-s16vector (* channels 1024) 1))
@@ -89,50 +87,50 @@
                  14
                  stream-info)
                 pa-abort)
-  (check-equal? (ptr-ref (sound-stream-info-already-stopped? stream-info)
+  (check-equal? (ptr-ref (stream-rec-already-stopped? stream-info)
                          _scheme) 
                 #t)
   ;; it's now been freed....
   (set! stream-info #f)
   
-  (define stream-info-2 (create-stream-info 1024 
-                                          (malloc-immobile-cell #f)))
+  (match-define (list stream-info-2 mzrt-sema-2)
+    (make-streamplay-record 1024 ))
   
   ;; buffer-not ready yet:
-  (set-sound-stream-info-last-used! stream-info-2 1025)
+  (set-stream-rec-last-used! stream-info-2 1025)
   (check-equal? (streaming-callback
                  (s16vector->cpointer tgt)
                  1024
                  stream-info-2)
                 pa-continue)
-  (check-equal? (sound-stream-info-last-used stream-info-2) 1026)
-  (check-equal? (sound-stream-info-fault-count stream-info-2) 1)
+  (check-equal? (stream-rec-last-used stream-info-2) 1026)
+  (check-equal? (stream-rec-fault-count stream-info-2) 1)
   (for ([i (in-range (* channels 1024))])
     (check-equal? (s16vector-ref tgt i) 0))
   
   ;; buffer ready:
-  (set-sound-stream-info-last-used! stream-info-2 1025)
-  (array-set! (sound-stream-info-buf-numbers stream-info-2) 2 1026)
+  (set-stream-rec-last-used! stream-info-2 1025)
+  (array-set! (stream-rec-buf-numbers stream-info-2) 2 1026)
   (check-equal? (streaming-callback
                  (s16vector->cpointer tgt)
                  1024
                  stream-info-2)
                 pa-continue)
-  (check-equal? (sound-stream-info-last-used stream-info-2) 1026)
+  (check-equal? (stream-rec-last-used stream-info-2) 1026)
   (let ()
-    (define buf (array-ref (sound-stream-info-buffers stream-info-2) 2))
+    (define buf (array-ref (stream-rec-buffers stream-info-2) 2))
     (for ([i (in-range (* channels 1024))])
       (check-equal? (s16vector-ref tgt i)
                     (ptr-ref buf _sint16 i))))
   
   ;; stop-now
-  (set-sound-stream-info-stop-now! stream-info-2 1)
+  (set-stream-rec-stop-now! stream-info-2 1)
   (check-equal? (streaming-callback
                  (s16vector->cpointer tgt)
                  1024
                  stream-info-2)
                 pa-abort)
-  (check-equal? (ptr-ref (sound-stream-info-already-stopped? stream-info-2)
+  (check-equal? (ptr-ref (stream-rec-already-stopped? stream-info-2)
                          _scheme) 
                 #t)
 

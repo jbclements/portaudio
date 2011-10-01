@@ -25,7 +25,7 @@ typedef struct soundStreamInfo{
   int   stopNow;
   Scheme_Object **stoppedPtr;
   int   faultCount;
-  mzrt_sema *bufferNeeded;
+  struct mzrt_sema *bufferNeeded;
 } soundStreamInfo;
 
 #define CHANNELS 2
@@ -37,6 +37,7 @@ typedef struct soundStreamInfo{
 void freeClosure(soundCopyingInfo *ri);
 void freeStreamingInfo(soundStreamInfo *ssi);
 
+// MOVE THIS INTO RACKET WHEN YOU GET TIME! :
 // copySound: just copy the whole darn sound into a freshly malloc'ed chunk.
 // not great, but solves *all* of the problems interacting with GC
 soundCopyingInfo *createClosure(short *data,
@@ -153,6 +154,7 @@ int streamingCallback(
     ssi->faultCount += 1;
   }
   ssi->lastUsed = nextBufNum;
+  mzrt_sema_post(ssi->bufferNeeded);
   // if using synchronization, trigger here....
   return(paContinue);
 

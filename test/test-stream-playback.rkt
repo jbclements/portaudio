@@ -2,6 +2,7 @@
 
 (require "../portaudio.rkt"
          "../portaudio-utils.rkt"
+         "../signalling.rkt"
          "helpers.rkt"
          ffi/vector
          ffi/unsafe
@@ -37,6 +38,7 @@
   (define log-counter 0)
   (define log empty)
   (define log2 empty)
+  (define log3 empty)
   
   (define srinv (exact->inexact (/ 1 44100)))
   (define (fill-buf ptr frames index)
@@ -51,19 +53,16 @@
       (define sample-idx (* channels i))
       (ptr-set! ptr _sint16 sample-idx sample)
       (ptr-set! ptr _sint16 (add1 sample-idx) sample))
-    (sleep 0.015))
+    (sleep 0.021))
   
-  ;; return #t if a buffer got written
-  (define (maybe-fill-buf streaming-info-ptr)
+  (define (call-fill-buf streaming-info-ptr)
     (match (buffer-if-waiting streaming-info-ptr)
-      [#f (set! log (cons '_ log))
-          #f]
+      [#f ;; oops, probably stacked up signals. go wait again.
+       #f]
       [(list ptr frames idx finished-thunk)
-       (set! log (cons 1 log))
        (set! log-counter (+ log-counter 1))
        (fill-buf ptr frames idx)
-       (finished-thunk)
-       #t]))
+       (finished-thunk)]))
   
   (let ()
     ;; map 0<rads<2pi to -pi/2<rads<pi/2
@@ -85,21 +84,35 @@
   ;; first just play silence; there's no process feeding the buffer
   (let ()
     (define buffer-frames 1024)
-    (define stream-info (make-streamplay-record buffer-frames))
+    (match-define (list stream-info place-channel)
+      (make-streamplay-record buffer-frames))
     (check-not-false (buffer-if-waiting stream-info))
     (define stream (open-test-stream streaming-callback
                                      stream-info
                                      buffer-frames))
+    (thread 
+     (lambda ()
+       (let loop ()
+         (place-channel-get place-channel)
+         (set! log3 (cons (pa-get-stream-time stream) log3))
+         (loop))))
     (printf "total silence\n")
     (test-start)
     (pa-start-stream stream)
     (sleep 1.0)
     (pa-stop-stream stream)
-    (test-end))
+    (test-end)
+    (define diffs (for/list ([j (in-list (rest log3))]
+                             [i (in-list log3)])
+                    (- i j)))
+    (printf "faults: ~s\n" (stream-fails stream-info))
+    (printf "log3 diffs: ~s\n" diffs))
   
+  ;; try playing a tone at 403 Hz:
   (let ()
     (define buffer-frames 1024)
-    (define stream-info (make-streamplay-record buffer-frames))
+    (match-define (list stream-info signal-channel)
+      (make-streamplay-record buffer-frames))
     (define stream (open-test-stream streaming-callback
                                      stream-info
                                      buffer-frames))
@@ -108,17 +121,11 @@
     (define filling-thread
       (thread
        (lambda ()
-         (maybe-fill-buf stream-info)
+         (call-fill-buf stream-info)
          (for ([i (in-range 1000)])
-           (define pre-time (pa-get-stream-time stream))
-           (maybe-fill-buf stream-info)
-           (define post-time (pa-get-stream-time stream))
-           (define time-taken (- post-time pre-time))
-           (set! log2 (cons (max 0.001 (- wake-delay time-taken)) log2))
-           #;(sleep wake-delay)
-           (when (< 0 (- wake-delay time-taken))
-               (sleep (- wake-delay time-taken)))
-           #;(sleep (max 0.000 (- wake-delay time-taken)))))))
+           (place-channel-get signal-channel)
+           (set! log2 (cons (pa-get-stream-time stream) log2))
+           (call-fill-buf stream-info)))))
     (sleep 0.5)      
     (test-start)
     (pa-start-stream stream)
@@ -126,8 +133,13 @@
     (pa-stop-stream stream)
     (test-end)
     (kill-thread filling-thread)
-    (printf "log2: \n~s\n" log2)
+    
+    (define diffs (for/list ([j (in-list (rest log2))]
+                             [i (in-list log2)])
+                    (- i j)))
+    (printf "log2 diffs: \n~s\n" diffs)
     (printf "log: \n~s\n" log)
+
     (printf "fails: ~s\n" (stream-fails stream-info))
     (check-equal? log-counter 44))
   
