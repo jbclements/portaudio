@@ -14,7 +14,7 @@
 (define time-checker #f)
 
 ;; sine wave at 403 Hz
-(define (buffer-filler sample-setter idx)
+(define (buffer-filler sample-setter len idx)
   (define pre-time (and time-checker (time-checker)))
   (define base-frames (* idx 1024))
   (define base-t (exact->inexact (* base-frames srinv)))

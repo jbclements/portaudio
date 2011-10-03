@@ -1,7 +1,7 @@
-all : copying-callbacks.dylib
+all : callbacks.dylib
 
-copying-callbacks.dylib : copying-callbacks.o
-	raco ctool --ld copying-callbacks.dylib copying-callbacks.o
+callbacks.dylib : callbacks.o
+	raco ctool --ld callbacks.dylib callbacks.o
 
-copying-callbacks.o : copying-callbacks.c
-	raco ctool --cc copying-callbacks.c
+callbacks.o : callbacks.c
+	raco ctool --cc callbacks.c

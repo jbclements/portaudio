@@ -20,7 +20,7 @@
 (let ()
   
   (define callback-lib
-    (ffi-lib (build-path libs (system-library-subpath) "copying-callbacks")))
+    (ffi-lib (build-path libs (system-library-subpath) "callbacks")))
   
 #|  typedef struct soundStreamInfo{
   int   bufferFrames;

@@ -176,5 +176,6 @@ void freeStreamingInfo(soundStreamInfo *ssi){
   for (i = 0; i < STREAMBUFS; i++) {
     free(ssi->buffers[i]);
   }
+  mzrt_sema_destroy(ssi->bufferNeeded);
   free(ssi);
 }

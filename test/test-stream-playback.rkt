@@ -53,7 +53,7 @@
       (define sample-idx (* channels i))
       (ptr-set! ptr _sint16 sample-idx sample)
       (ptr-set! ptr _sint16 (add1 sample-idx) sample))
-    (sleep 0.021))
+    (sleep 0.001))
   
   (define (call-fill-buf streaming-info-ptr)
     (match (buffer-if-waiting streaming-info-ptr)
@@ -100,7 +100,7 @@
     (test-start)
     (pa-start-stream stream)
     (sleep 1.0)
-    (pa-stop-stream stream)
+    (stop-sound stream-info)
     (test-end)
     (define diffs (for/list ([j (in-list (rest log3))]
                              [i (in-list log3)])
@@ -117,7 +117,6 @@
                                      stream-info
                                      buffer-frames))
     (printf "tone at 403 Hz\n")
-    (define wake-delay (* 1/4 (/ 1 (/ 44100 1024))))
     (define filling-thread
       (thread
        (lambda ()
@@ -128,9 +127,12 @@
            (call-fill-buf stream-info)))))
     (sleep 0.5)      
     (test-start)
+    (collect-garbage)
+    (collect-garbage)
+    (collect-garbage)
     (pa-start-stream stream)
     (sleep 1.0)
-    (pa-stop-stream stream)
+    (stop-sound stream-info)
     (test-end)
     (kill-thread filling-thread)
     

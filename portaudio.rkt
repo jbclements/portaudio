@@ -1334,7 +1334,7 @@ PaError Pa_CloseStream( PaStream *stream );
 
 #|
 
-/** Functions of type PaStreamFinishedCallback are implemented by PortAudio 
+/** Functions of type PaStreamFinishedCallback are implemented by PortAudio 
  clients. They can be registered with a stream using the Pa_SetStreamFinishedCallback
  function. Once registered they are called when the stream becomes inactive
  (ie once a call to Pa_StopStream() will not block).
@@ -1349,6 +1349,10 @@ PaError Pa_CloseStream( PaStream *stream );
  @see Pa_SetStreamFinishedCallback
 */
 typedef void PaStreamFinishedCallback( void *userData );
+|#
+;; not porting this to scheme; it's a better idea just to keep it in C.
+(define-cpointer-type _pa-stream-finished-callback)
+#|
 
 
 /** Register a stream finished callback function which will be called when the 
@@ -1370,7 +1374,12 @@ typedef void PaStreamFinishedCallback( void *userData );
  @see PaStreamFinishedCallback
 */
 PaError Pa_SetStreamFinishedCallback( PaStream *stream, PaStreamFinishedCallback* streamFinishedCallback ); 
-
+|#
+(define-checked pa-set-stream-finished-callback
+  (get-ffi-obj "Pa_SetStreamFinishedCallback"
+               libportaudio
+               (_fun _pa-stream _pa-stream-finished-callback -> _pa-error)))
+#|
 
 /** Commences audio processing.
 */

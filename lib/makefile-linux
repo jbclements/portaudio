@@ -1,7 +1,7 @@
-all : copying-callbacks.so
+all : callbacks.so
 
-copying-callbacks.so : copying-callbacks.o
-	raco ctool --ld copying-callbacks.so copying-callbacks.o
+callbacks.so : callbacks.o
+	raco ctool --ld callbacks.so callbacks.o
 
-copying-callbacks.o : copying-callbacks.c
-	raco ctool --cc copying-callbacks.c
+callbacks.o : callbacks.c
+	raco ctool --cc callbacks.c
