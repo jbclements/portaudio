@@ -90,6 +90,7 @@
     (define stream (open-test-stream streaming-callback
                                      stream-info
                                      buffer-frames))
+    (pa-set-stream-finished-callback stream streaming-info-free)
     (thread 
      (lambda ()
        (let loop ()
@@ -101,6 +102,10 @@
     (pa-start-stream stream)
     (sleep 1.0)
     (stop-sound stream-info)
+    ;; check 3x stop:
+    (pa-maybe-stop-stream stream)
+    (pa-maybe-stop-stream stream)
+    (pa-maybe-stop-stream stream)
     (test-end)
     (define diffs (for/list ([j (in-list (rest log3))]
                              [i (in-list log3)])
@@ -116,6 +121,7 @@
     (define stream (open-test-stream streaming-callback
                                      stream-info
                                      buffer-frames))
+    (pa-set-stream-finished-callback stream streaming-info-free)
     (printf "tone at 403 Hz\n")
     (define filling-thread
       (thread
@@ -125,7 +131,7 @@
            (place-channel-get signal-channel)
            (set! log2 (cons (pa-get-stream-time stream) log2))
            (call-fill-buf stream-info)))))
-    (sleep 0.5)      
+    (sleep 0.5)
     (test-start)
     (collect-garbage)
     (collect-garbage)
@@ -133,6 +139,10 @@
     (pa-start-stream stream)
     (sleep 1.0)
     (stop-sound stream-info)
+    ;; check 3x stop:
+    (pa-maybe-stop-stream stream)
+    (pa-maybe-stop-stream stream)
+    (pa-maybe-stop-stream stream)
     (test-end)
     (kill-thread filling-thread)
     

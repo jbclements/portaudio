@@ -22,8 +22,6 @@ typedef struct soundStreamInfo{
   int   bufNumbers[STREAMBUFS];
   // mutated by callback only:
   int   lastUsed;
-  int   stopNow;
-  Scheme_Object **stoppedPtr;
   int   faultCount;
   struct mzrt_sema *bufferNeeded;
 } soundStreamInfo;
@@ -104,9 +102,8 @@ int copyingCallback(
     memset(zeroRegionBegin,0,bytesToZero);
     ri->curSample = ri->numSamples;
 
-    freeClosure(ri);
     return(paComplete);
-    
+
   } else {
     // this is not the last chunk. 
     bytesToCopy = SAMPLEBYTES * samplesToCopy;
@@ -129,17 +126,11 @@ int streamingCallback(
   int nextBufNum = ssi->lastUsed + 1;
   int modCounter = nextBufNum % STREAMBUFS;
 
-  if (ssi->stopNow) {
-    freeStreamingInfo(ssi);
-    return(paAbort);
-  }
-
   // right number of frames requested?
   if (ssi->bufferFrames != frameCount) {
     fprintf(stderr,"audio unit requested %ld frames, instead of expected %d.\n",
             frameCount,
             ssi->bufferFrames);
-    freeStreamingInfo(ssi);
     return(paAbort);
   }
   
@@ -155,7 +146,6 @@ int streamingCallback(
   }
   ssi->lastUsed = nextBufNum;
   mzrt_sema_post(ssi->bufferNeeded);
-  // if using synchronization, trigger here....
   return(paContinue);
 
 }
@@ -172,10 +162,11 @@ void freeClosure(soundCopyingInfo *ri){
 void freeStreamingInfo(soundStreamInfo *ssi){
   int i;
 
-  *(ssi->stoppedPtr) = scheme_true;
   for (i = 0; i < STREAMBUFS; i++) {
     free(ssi->buffers[i]);
   }
+  // Racket code must destroy the listener before
+  // this happens.
   mzrt_sema_destroy(ssi->bufferNeeded);
   free(ssi);
 }

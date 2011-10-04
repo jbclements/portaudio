@@ -41,21 +41,27 @@
      buffer-frames ;;frames-per-buffer  ;; frames per buffer
      streaming-callback ;; callback (NULL means just wait for data)
      stream-info))
+  (pa-set-stream-finished-callback stream
+                                   streaming-info-free)
+  ;; pre-fill of first buffer:
+  (call-fill-buf stream-info buffer-filler)
   (define filling-thread
     (thread
      (lambda ()
-       ;; pre-fill of first buffer:
-       (call-fill-buf stream-info buffer-filler)
        (let loop ()
          (place-channel-get signal-channel)
          (call-fill-buf stream-info buffer-filler)
          (loop)))))
+  ;; a substantial sleep seems to be necessary here.
+  ;; the 0.5 seems adequate on my test machine....
+  (sleep 0.5)
   (pa-start-stream stream)
   (define (stream-time)
     (pa-get-stream-time stream))
   (define (stopper)
     (kill-thread filling-thread)
-    (stop-sound stream-info))
+    (stop-sound stream-info)
+    (pa-maybe-stop-stream stream))
   (list stream-time stopper))
 
 ;; the safe version checks the index of each sample before it's 

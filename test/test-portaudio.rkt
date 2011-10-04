@@ -87,6 +87,7 @@
     (define abort-box (box #f))
     (define callback-info (make-sndplay-record tone-buf-330))
     (define stream (open-test-stream copying-callback callback-info))
+    (pa-set-stream-finished-callback stream copying-info-free)
     (check-equal? (pa-stream-stopped? stream) #t)
     (check-equal? (pa-stream-active? stream) #f)
     (printf "1/2 second @ 330 Hz\n")
@@ -106,9 +107,11 @@
     (define stream-1 (open-test-stream 
                       copying-callback
                       (make-sndplay-record tone-buf-330)))
+    (pa-set-stream-finished-callback stream-1 copying-info-free)
     (define stream-2 (open-test-stream
                       copying-callback
                       (make-sndplay-record tone-buf-380)))
+    (pa-set-stream-finished-callback stream-2 copying-info-free)
     (printf "1/2 second @ 330 & 380 Hz\n")
     (test-start)
     (pa-start-stream stream-1)
@@ -119,17 +122,18 @@
   ;; a 10-second tone  
   (define longer-tone-buf (make-tone-buf 440 441000))
   
-  ;; ending a stream with the abort-box
+  ;; ending a stream with stop-stream
   (let ()
     (define info (make-sndplay-record longer-tone-buf))
     (define stream-1 (open-test-stream 
                       copying-callback
                       info))
+    (pa-set-stream-finished-callback stream-1 copying-info-free)
     (printf "1/2 second @ 440 Hz\n")
     (test-start)
     (pa-start-stream stream-1)
     (sleep 0.5)
-    (stop-sound info)
+    (pa-stop-stream stream-1)
     (sleep 0.1)
     (check-equal? (pa-stream-active? stream-1) #f)
     (test-end))
@@ -140,41 +144,28 @@
     (define stream-1 (open-test-stream 
                       copying-callback
                       info))
+    (pa-set-stream-finished-callback stream-1 copying-info-free)
     (printf "1/2 second @ 440 Hz\n")
     (test-start)
     (pa-start-stream stream-1)
     (sleep 0.5)
-    (stop-sound info)
-    (stop-sound info)
-    (stop-sound info)
+    (pa-maybe-stop-stream stream-1)
+    (pa-maybe-stop-stream stream-1)
+    (pa-maybe-stop-stream stream-1)
     (test-end))
   
-  ;; try stopping a sound that's already stopped:
+  ;; try stopping a sound that's already over:
   (let ()
     (define info (make-sndplay-record tone-buf-380))
     (define stream-1 (open-test-stream 
                       copying-callback
                       info))
+    (pa-set-stream-finished-callback stream-1 copying-info-free)
     (printf "1/2 second @ 380 Hz\n")
     (test-start)
     (pa-start-stream stream-1)
     (sleep 1.0)
-    (stop-sound info)
-    (test-end))
-  
-  ;; GENERATING CALLBACKS
-  #;(let ()
-    (define abort-box (box #f))
-    (define (signal t)
-      (* 0.1 (sin (* t 1/44100 2 pi 410))))
-    (define callback
-      (make-generating-callback signal 1000 response-channel abort-box))
-    (define stream (open-test-stream callback))
-    (printf "1/2 second @ 410 Hz\n")
-    (test-start)
-    (pa-start-stream stream)
-    (sleep 0.5)
-    (set-box! abort-box #t)
+    (pa-stop-stream stream-1)
     (test-end))
   
   ;; tests for stream-play and s16vec-play....
