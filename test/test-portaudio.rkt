@@ -177,6 +177,8 @@
     (set-box! abort-box #t)
     (test-end))
   
+  ;; tests for stream-play and s16vec-play....
+  
   ;; check for wrong size buffer
   
   #;(let ()

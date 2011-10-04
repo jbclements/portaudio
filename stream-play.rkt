@@ -5,22 +5,28 @@
          "portaudio-utils.rkt"
          (rename-in racket/contract [-> c->]))
 
-(define sample-setter/c (c-> exact-integer? exact-integer? void?))
-(define buffer-filler/c (c-> any/c exact-integer? exact-integer? void?))
+(define nat? exact-nonnegative-integer?)
+
+(define sample-setter/c (c-> nat? nat? void?))
+(define buffer-filler/c (c-> procedure? nat? nat? void?))
+(define buffer-filler/unsafe/c (c-> cpointer? nat? nat? void?))
 (define time-checker/c (c-> number?))
 (define sound-killer/c (c-> void?))
 
 (provide/contract [stream-play
-                   (c-> buffer-filler/c exact-integer? integer? 
+                   (c-> buffer-filler/c nat? integer? 
                         (list/c time-checker/c
                                 sound-killer/c))]
                   [stream-play/unsafe 
-                   (c-> procedure? exact-integer? integer? 
+                   (c-> procedure? nat? integer? 
                         (list/c time-checker/c
                                 sound-killer/c))])
 
 (define channels 2)
 
+;; given a buffer-filler and a frame length and a sample rate,
+;; starts a stream, using the buffer-filler to provide data as
+;; needed.
 (define (stream-play/unsafe buffer-filler buffer-frames sample-rate)
   (pa-maybe-initialize)
   (match-define (list stream-info signal-channel)
