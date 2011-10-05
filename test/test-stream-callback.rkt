@@ -22,25 +22,14 @@
   (define callback-lib
     (ffi-lib (build-path libs (system-library-subpath) "callbacks")))
   
-#|  typedef struct soundStreamInfo{
-  int   bufferFrames;
-  short *buffers[STREAMBUFS];
-  // mutated by racket only:
-  int   bufNumbers[STREAMBUFS];
-  // mutated by callback only:
-  int   lastUsed;
-  int   stopNow;
-} soundStreamInfo;|#
-
   (define streambufs 4)
   (define-cstruct _stream-rec
     ([buffer-frames _int]
      [buffers (_array _pointer streambufs)]
      [buf-numbers (_array _int streambufs)]
      [last-used _int]
-     [stop-now _int]
-     [already-stopped? _pointer]
-     [fault-count _int]))
+     [fault-count _int]
+     [mzrt-sema _pointer]))
   
   (define streaming-callback
     (get-ffi-obj "streamingCallback"
@@ -56,22 +45,17 @@
   
   
   (match-define
-    (list stream-info mzrt-sema) 
+    (list stream-info place-channel) 
     (make-streamplay-record 1024))
   
   (check-equal? (stream-rec-buffer-frames stream-info)
                 1024)
   (check-equal? (stream-rec-last-used stream-info) -1)
-  (check-equal? (stream-rec-stop-now stream-info) 0)
   (check-equal? (for/list ([i (in-range streambufs)])
                   (array-ref (stream-rec-buf-numbers
                               stream-info)
                              i))
                 '(-1 -1 -1 -1))
-  (check-equal? (ptr-ref (stream-rec-already-stopped? 
-                          stream-info)
-                         _scheme)
-                #f)
   (check-equal? (stream-rec-fault-count stream-info) 0)
   
   ;; randomize all the buffers
@@ -87,14 +71,11 @@
                  14
                  stream-info)
                 pa-abort)
-  (check-equal? (ptr-ref (stream-rec-already-stopped? stream-info)
-                         _scheme) 
-                #t)
   ;; it's now been freed....
   (set! stream-info #f)
   
-  (match-define (list stream-info-2 mzrt-sema-2)
-    (make-streamplay-record 1024 ))
+  (match-define (list stream-info-2 place-channel-2)
+    (make-streamplay-record 1024))
   
   ;; buffer-not ready yet:
   (set-stream-rec-last-used! stream-info-2 1025)
@@ -123,17 +104,6 @@
       (check-equal? (s16vector-ref tgt i)
                     (ptr-ref buf _sint16 i))))
   
-  ;; stop-now
-  (set-stream-rec-stop-now! stream-info-2 1)
-  (check-equal? (streaming-callback
-                 (s16vector->cpointer tgt)
-                 1024
-                 stream-info-2)
-                pa-abort)
-  (check-equal? (ptr-ref (stream-rec-already-stopped? stream-info-2)
-                         _scheme) 
-                #t)
-
 
   )))
 

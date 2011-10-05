@@ -5,7 +5,8 @@
          (rename-in racket/contract [-> c->])
          racket/runtime-path
          "mzrt-sema.rkt"
-         "signalling.rkt")
+         "signalling.rkt"
+         "portaudio.rkt")
 
 (define-runtime-path lib "lib/")
 
@@ -16,19 +17,18 @@
 ;; to interact with and manage those callbacks.
 
 ;; the tricky thing is managing the resources that are shared
-;; between C and Racket. The problem is that it's very hard
-;; to control whether the C side gets run again. The solution
-;; that this code uses is to have the C side do all of the 
-;; cleanup. To halt a sound, you set the "stop-now" flag high,
-;; and when the C side notices it, it will free all of the
-;; resources, and exit.  One big question mark is whether 
-;; a "stop-stream" is necessary; right now, it's not happening.
+;; between C and Racket.
+
+;; currently, there are two bits that racket doesn't manage,
+;; the streaming record and the mzrt_sema. These are both 
+;; freed by the finished-callback that's attached to the 
+;; stream.  This means that the place that's blocked on 
+;; that semaphore had better be destroyed *before* the stream
+;; is closed.
 
 (define (frames? n)
   (and (exact-integer? n)
        (<= 0 n)))
-
-
 
 (provide/contract 
  ;; make a sndplay record for playing a precomputed sound.
@@ -51,7 +51,11 @@
  [streaming-callback cpointer?]
  ;; how many times has a given stream failed (i.e. not had a 
  ;; buffer provided in time by racket)?
- [stream-fails (c-> cpointer? integer?)])
+ [stream-fails (c-> cpointer? integer?)]
+ ;; the free function for a copying callback
+ [copying-info-free cpointer?]
+ ;; the free function for a streaming callback
+ [streaming-info-free cpointer?])
 
 ;; all of these functions assume 2-channel-interleaved 16-bit input:
 (define channels 2)
@@ -78,17 +82,11 @@
    ;; the index of the buffer last copied
    ;; out by the callback:
    [last-used _int]
-   ;; set this int to 1 to halt playback:
-   ;; NB: this should probably be replaced
-   ;; with a stream-finished-callback....
-   [stop-now _bool]
-   ;; pointer to an immutable cell, the callback
-   ;; sets this to #t when the record is free'd.
-   [already-freed? _pointer]
    ;; number of faults:
    [fault-count _int]
-   ;; an mzrt-sema used to signal 
-   ;; when data is needed
+   ;; a pointer to an immobile cell containing 
+   ;; an mzrt-sema, used to signal when data is
+   ;; needed
    [buffer-needed-sema _pointer]))
 
 
@@ -109,17 +107,12 @@
     (error 'make-sndplay-record
            "failed to allocate space for ~s samples."
            (s16vector-length s16vec)))
-  (hash-set! sound-stopping-table sndplay-record 
-             (list already-freed? (make-semaphore 1)
-                   (lambda ()
-                     (set-copied-sound-info-stop-now! sndplay-record #t))))
   sndplay-record)
 
 ;; create a fresh streaming-sound-info structure, including
 ;; four buffers to be used in rendering the sound.
 (define (make-streamplay-record buffer-frames)
-  ;; will never get freed.... but 4 bytes lost should be okay.
-  (define already-freed? (malloc-immobile-cell #f))
+  ;; will never get freed.... but a few bytes lost should be okay....
   (define mzrt-sema (mzrt-sema-create 0))
   (define info (cast (malloc _stream-rec 'raw)
                      _pointer
@@ -131,16 +124,13 @@
                 (malloc _sint16 (* buffer-frames channels) 'raw))
     (array-set! (stream-rec-buf-numbers info) i -1))
   (set-stream-rec-last-used! info -1)
-  (set-stream-rec-stop-now! info #f)
-  (set-stream-rec-already-freed?! info already-freed?)
   (set-stream-rec-fault-count! info 0)
   (set-stream-rec-buffer-needed-sema! info mzrt-sema)
   (define listening-place (mzrt-sema-listener mzrt-sema))
   (hash-set! sound-stopping-table info
-             (list already-freed? (make-semaphore 1)
+             (list (make-semaphore 1)
                    (lambda ()
-                     (place-kill listening-place)
-                     (set-stream-rec-stop-now! info #t))))
+                     (place-kill listening-place))))
   (list info listening-place))
 
 
@@ -168,22 +158,19 @@
                              next-to-be-used)))]))
 
 ;; stop a sound
-;; EFFECT: stops the sound *and frees the sndplay-record*, unless
-;; it's already done.
-(define (stop-sound sndplay-record)
-  (match (hash-ref sound-stopping-table sndplay-record #f)
+;; EFFECT: stops the stream, unless it's already done.
+(define (stop-sound streamplay-info)
+  (match (hash-ref sound-stopping-table streamplay-info #f)
     [#f (error 'stop-sound "record had no entry in the stopping table")]
-    [(list already-freed? sema stop-thunk)
+    [(list sema stop-thunk)
+     #;(printf "stopping!\n")
      (match (semaphore-try-wait? sema)
        ;; sound has already been stopped
        [#f (void)]
-       [#t 
-        ;; for debugging only:
-        #;(printf "already freed: ~s\n"
-                  (ptr-ref already-freed? _scheme))        
-        (unless (ptr-ref already-freed? _scheme)
-          (stop-thunk))])]))
+       [#t (stop-thunk)])]))
 
+;; the same pointer may be allocated again, so use hasheq:
+(define sound-stopping-table (make-hasheq))
 
 ;; FFI OBJECTS FROM THE C CALLBACK LIBRARY
 
@@ -203,14 +190,27 @@
   ([datum _uint16]))
 
 (define copying-callback
-  (get-ffi-obj "copyingCallback"   callbacks-lib _bogus-struct))
+  (cast
+   (get-ffi-obj "copyingCallback" callbacks-lib _bogus-struct)
+   _bogus-struct-pointer
+   _pa-stream-callback))
 
 (define streaming-callback
-  (get-ffi-obj "streamingCallback" callbacks-lib _bogus-struct))
+  (cast
+   (get-ffi-obj "streamingCallback" callbacks-lib _bogus-struct)
+   _bogus-struct-pointer
+   _pa-stream-callback))
 
-;; DON'T IMPORT THE FREE FUNCTIONS... they should only be called by C.
+(define copying-info-free
+  (cast
+   (get-ffi-obj "freeClosure" callbacks-lib _bogus-struct)
+   _bogus-struct-pointer
+   _pa-stream-finished-callback))
 
+(define streaming-info-free
+  (cast
+   (get-ffi-obj "freeStreamingInfo" callbacks-lib _bogus-struct)
+   _bogus-struct-pointer
+   _pa-stream-finished-callback))
 
-
-(define sound-stopping-table (make-weak-hash))
 

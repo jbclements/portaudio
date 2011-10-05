@@ -30,9 +30,14 @@
       (set! log1 (cons (- post-time pre-time) log1))
       (set! log1 (cons #f log1))))
 
+(collect-garbage)
+(collect-garbage)
+(collect-garbage)
 (match-define (list checker stopper)
   (stream-play buffer-filler 1024 44100))
 (set! time-checker checker)
+
+
 (sleep 3.0)
 (stopper)
 
@@ -54,18 +59,22 @@
     (ptr-set! ptr _sint16 (add1 sample-idx) sample))
   (define post-time (and time-checker (time-checker)))
   (if (and pre-time post-time)
-      (set! log2 (cons (- post-time pre-time) log2))
+      (set! log2 (cons pre-time #;(- post-time pre-time) log2))
       (set! log2 (cons #f log2))))
 
 (match-define (list checker2 stopper2)
   (stream-play/unsafe buffer-filler/unsafe 1024 44100))
 (set! time-checker checker2)
-(sleep 3.0)
+(sleep 0.5)
 (stopper2)
 
 ;; fails
 (length (filter not log2))
-(mean-and-variance (filter (lambda (x) x) log2))
+(for/list ([t (in-list (rest log2))]
+           [s (in-list log2)])
+  (- s t))
+#;(mean-and-variance (filter (lambda (x) x) log2))
+
 
 
 
