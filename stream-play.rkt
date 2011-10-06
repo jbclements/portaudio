@@ -54,7 +54,7 @@
          (loop)))))
   ;; a substantial sleep seems to be necessary here.
   ;; the 0.5 seems adequate on my test machine....
-  (sleep 0.5)
+  #;(sleep 0.5)
   (pa-start-stream stream)
   (define (stream-time)
     (pa-get-stream-time stream))

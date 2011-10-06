@@ -11,10 +11,14 @@
 
 (define nat? exact-nonnegative-integer?)
 
-(provide/contract [s16vec-play (c-> s16vector? nat? nat? integer?
-                                    void?)])
+(provide/contract [s16vec-play (c-> s16vector? nat? (or/c false? nat?) integer?
+                                    (c-> void?))])
 
-(define (s16vec-play s16vec start-frame stop-frame sample-rate)
+(define (s16vec-play s16vec start-frame pre-stop-frame sample-rate)
+  (define total-frames (/ (s16vector-length s16vec) channels))
+  (define stop-frame (or pre-stop-frame
+                        total-frames))
+  (check-args s16vec total-frames start-frame stop-frame)
   (define sound-frames (- stop-frame start-frame))
   (define stopper-box (box #f))
   (define (feeder buf buffer-frames idx)
@@ -40,7 +44,18 @@
               ((unbox stopper-box)))))))
   (match-define (list timer stopper)
     (stream-play/unsafe feeder default-buffer-frames sample-rate))
-  (set! stopper-box stopper))
+  (set-box! stopper-box stopper)
+  stopper)
+
+(define (check-args vec total-frames start-frame stop-frame)
+  (unless (integer? total-frames)
+    (raise-type-error 's16vec-play "vector of length divisible by 2" 0 vec start-frame stop-frame))
+  (when (<= total-frames start-frame)
+    (raise-type-error 's16vec-play "start frame < total number of frames" 1 vec start-frame stop-frame))
+  (when (< total-frames stop-frame)
+    (raise-type-error 's16vec-play "end frame < total number of frames" 2 vec start-frame stop-frame))
+  (when (< stop-frame start-frame)
+    (raise-type-error 's16vec-play "start frame <= end frame" 1 vec start-frame stop-frame)))
 
 ;; at 44100, this is close to 100ms, which should cover most
 ;; GC pauses.
