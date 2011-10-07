@@ -9,8 +9,6 @@ typedef struct soundCopyingInfo{
   short *sound;
   unsigned long curSample;
   unsigned long numSamples;
-  int stopNow;
-  Scheme_Object **stoppedPtr;
 } soundCopyingInfo;
 
 #define STREAMBUFS 4
@@ -55,11 +53,6 @@ int copyingCallback(
   size_t bytesToCopy;
   char *zeroRegionBegin;
   size_t bytesToZero;
-
-  if (ri->stopNow) {
-    freeClosure(ri);
-    return(paAbort);
-  }
 
   if (ri->numSamples <= nextCurSample) {
     // this is the last chunk.
@@ -122,7 +115,6 @@ int streamingCallback(
 // clean up when done:  free the sound data and the
 // closure data
 void freeClosure(soundCopyingInfo *ri){
-  *(ri->stoppedPtr) = scheme_true;
   free(ri->sound);
   free(ri);
 }

@@ -4,7 +4,8 @@
          "../callback-support.rkt"
          "helpers.rkt"
          rackunit
-         rackunit/text-ui)
+         rackunit/text-ui
+         ffi/unsafe)
 
 (define twopi (* 2 pi))
 
@@ -78,9 +79,8 @@
     
   (define tone-buf-330 (make-tone-buf 330 22050))
   
-  ;; first, test the copying-callback.
-
   
+  ;; first, test the copying-callback.
   (let ()
     (define abort-box (box #f))
     (define callback-info (make-copying-info tone-buf-330 0 #f))

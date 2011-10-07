@@ -63,71 +63,34 @@
 (define s16-bytes 2)
 
 ;; COPYING CALLBACK STRUCT
-(define-cstruct _copied-sound-info
+(define-cstruct _copying-rec
   ([sound         _pointer]
-   [curSample     _ulong]
-   [numSamples    _ulong]
-   [stop-now      _bool]
-   [stop-sema-ptr _pointer]))
+   [cur-sample    _ulong]
+   [num-samples   _ulong]))
 
-#|
-// MOVE THIS INTO RACKET WHEN YOU GET TIME! :
-// copySound: just copy the whole darn sound into a freshly malloc'ed chunk.
-// not great, but solves *all* of the problems interacting with GC
-soundCopyingInfo *createClosure(short *data,
-                                unsigned long samples,
-                                Scheme_Object **stoppedPtr) {
-
-  size_t numSoundBytes = (SAMPLEBYTES * samples);
-  short *copiedSound = malloc(numSoundBytes);
-
-  if (copiedSound == NULL) {
-    return(NULL);
-  } else {
-    memcpy((void *)copiedSound,(void *)data,numSoundBytes);
-
-    soundCopyingInfo *result = malloc(sizeof(soundCopyingInfo));
-
-    if (result == NULL) {
-      free(copiedSound);
-      return(NULL);
-    } else {
-      result->sound = copiedSound;
-      result->curSample = 0;
-      result->numSamples = samples;
-      result->stopNow = 0;
-      result->stoppedPtr = stoppedPtr;
-      return(result);
-    }
-  }
-}
-
-|#
-
-;; create a fresh copied-sound-info structure, including a full
+;; create a fresh copying-rec structure, including a full
 ;; malloc'ed copy of the sound data. No sanity checking of start
 ;; & stop is done.
 (define (make-copying-info s16vec start-frame maybe-stop-frame)
   (define stop-frame (or maybe-stop-frame
                          (/ (s16vector-length s16vec) channels)))
-  ;; actually, we can get rid of this real soon now.
-  ;; will never get freed.... but 4 bytes lost should be okay.
-  (define already-freed? (malloc-immobile-cell #f))
-  (define copying-info (define info (cast (malloc _copying-rec 'raw)
-                                          _pointer
-                                          _copying-rec-pointer)))
   (define frames-to-copy (- stop-frame start-frame))
+  ;; do this allocation first: it's much bigger, and more likely to fail:
   (define copied-sound (malloc _sint16 (* channels frames-to-copy) 'raw))
   (define src-ptr (ptr-add (s16vector->cpointer s16vec)
                            (* channels start-frame)
                            _sint16))
   (memcpy copied-sound src-ptr (* channels frames-to-copy) _sint16)
-  ;; do the rest of the set!ing here....
-  (unless sndplay-record
-    (error 'make-sndplay-record
-           "failed to allocate space for ~s samples."
-           (s16vector-length s16vec)))
-  sndplay-record)
+  ;; actually, we can get rid of this real soon now.
+  ;; will never get freed.... but 4 bytes lost should be okay.
+  (define already-freed? (malloc-immobile-cell #f))
+  (define copying-info (cast (malloc _copying-rec 'raw)
+                             _pointer
+                             _copying-rec-pointer))
+  (set-copying-rec-sound! copying-info copied-sound)
+  (set-copying-rec-cur-sample! copying-info 0)
+  (set-copying-rec-num-samples! copying-info (* frames-to-copy channels))
+  copying-info)
 
 
 ;; STREAMING CALLBACK STRUCT
@@ -204,10 +167,6 @@ soundCopyingInfo *createClosure(short *data,
 (define callbacks-lib (ffi-lib (build-path lib
                                            (system-library-subpath)
                                            "callbacks")))
-
-(define create-closure/raw
-  (get-ffi-obj "createClosure" callbacks-lib
-               (_fun _pointer _ulong _pointer -> _copied-sound-info-pointer)))
 
 ;; in order to get a raw pointer to pass back to C, we declare 
 ;; the function pointers as being simple structs:
