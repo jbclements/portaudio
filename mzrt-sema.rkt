@@ -1,4 +1,4 @@
-#lang racket
+#lang racket/base
 
 (require ffi/unsafe)
 ;; The mzrt-sema functions work with OS threads. Unfortunately,

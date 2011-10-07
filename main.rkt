@@ -7,5 +7,5 @@
 
 (provide (all-from-out "portaudio.rkt")
          (all-from-out "callback-support.rkt")
-         (all-from-out "s16vect-play.rkt")
+         (all-from-out "s16vec-play.rkt")
          (all-from-out "stream-play.rkt"))

@@ -30,7 +30,7 @@
 (define (stream-play/unsafe buffer-filler buffer-frames sample-rate)
   (pa-maybe-initialize)
   (match-define (list stream-info signal-channel)
-    (make-streamplay-record buffer-frames))
+    (make-streaming-info buffer-frames))
   (define sr/i (exact->inexact sample-rate))
   (define stream
     (pa-open-default-stream
@@ -52,15 +52,12 @@
          (place-channel-get signal-channel)
          (call-fill-buf stream-info buffer-filler)
          (loop)))))
-  ;; a substantial sleep seems to be necessary here.
-  ;; the 0.5 seems adequate on my test machine....
-  #;(sleep 0.5)
   (pa-start-stream stream)
   (define (stream-time)
     (pa-get-stream-time stream))
   (define (stopper)
     (kill-thread filling-thread)
-    (stop-sound stream-info)
+    (place-kill signal-channel)
     (pa-maybe-stop-stream stream))
   (list stream-time stopper))
 
