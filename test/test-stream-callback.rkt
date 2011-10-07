@@ -1,7 +1,7 @@
 #lang racket
 
 (require "helpers.rkt"
-         "../portaudio-utils.rkt"
+         "../callback-support.rkt"
          ffi/unsafe
          ffi/vector
          rackunit
@@ -46,7 +46,7 @@
   
   (match-define
     (list stream-info place-channel) 
-    (make-streamplay-record 1024))
+    (make-streaming-info 1024))
   
   (check-equal? (stream-rec-buffer-frames stream-info)
                 1024)
@@ -75,7 +75,7 @@
   (set! stream-info #f)
   
   (match-define (list stream-info-2 place-channel-2)
-    (make-streamplay-record 1024))
+    (make-streaming-info 1024))
   
   ;; buffer-not ready yet:
   (set-stream-rec-last-used! stream-info-2 1025)

@@ -1,7 +1,7 @@
 #lang racket
 
 (require "../portaudio.rkt"
-         "../portaudio-utils.rkt"
+         "../callback-support.rkt"
          "../signalling.rkt"
          "helpers.rkt"
          ffi/vector
@@ -28,7 +28,7 @@
      streaming-info-ptr))
   
   (define (test-start) 
-    (sleep 2)
+    #;(sleep 2)
     (printf "starting now... "))
   
   (define (test-end)
@@ -85,7 +85,7 @@
   (let ()
     (define buffer-frames 1024)
     (match-define (list stream-info place-channel)
-      (make-streamplay-record buffer-frames))
+      (make-streaming-info buffer-frames))
     (check-not-false (buffer-if-waiting stream-info))
     (define stream (open-test-stream streaming-callback
                                      stream-info
@@ -101,7 +101,7 @@
     (test-start)
     (pa-start-stream stream)
     (sleep 1.0)
-    (stop-sound stream-info)
+    (place-kill place-channel)
     ;; check 3x stop:
     (pa-maybe-stop-stream stream)
     (pa-maybe-stop-stream stream)
@@ -117,7 +117,7 @@
   (let ()
     (define buffer-frames 1024)
     (match-define (list stream-info signal-channel)
-      (make-streamplay-record buffer-frames))
+      (make-streaming-info buffer-frames))
     (define stream (open-test-stream streaming-callback
                                      stream-info
                                      buffer-frames))
@@ -131,14 +131,10 @@
            (place-channel-get signal-channel)
            (set! log2 (cons (pa-get-stream-time stream) log2))
            (call-fill-buf stream-info)))))
-    (sleep 0.5)
     (test-start)
-    (collect-garbage)
-    (collect-garbage)
-    (collect-garbage)
     (pa-start-stream stream)
     (sleep 1.0)
-    (stop-sound stream-info)
+    (place-kill signal-channel)
     ;; check 3x stop:
     (pa-maybe-stop-stream stream)
     (pa-maybe-stop-stream stream)

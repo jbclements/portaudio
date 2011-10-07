@@ -2,49 +2,45 @@
 
 (require ffi/vector
          ffi/unsafe
-         "stream-play.rkt"
-         (rename-in racket/contract [-> c->]))
+         (rename-in racket/contract [-> c->])
+         "portaudio.rkt"
+         "callback-support.rkt")
 
-;; builds on stream-play to play s16vecs.
 
-(define channels 2)
 
 (define nat? exact-nonnegative-integer?)
 
 (provide/contract [s16vec-play (c-> s16vector? nat? (or/c false? nat?) integer?
                                     (c-> void?))])
 
+;; it would use less memory to use stream-play, but
+;; there's an unacceptable 1/2-second lag in starting
+;; a new place.
+
+(define channels 2)
+
 (define (s16vec-play s16vec start-frame pre-stop-frame sample-rate)
   (define total-frames (/ (s16vector-length s16vec) channels))
   (define stop-frame (or pre-stop-frame
                         total-frames))
   (check-args s16vec total-frames start-frame stop-frame)
-  (define sound-frames (- stop-frame start-frame))
-  (define stopper-box (box #f))
-  (define (feeder buf buffer-frames idx)
-    (define t (* buffer-frames idx))
-    (define offset (+ start-frame t))
-    (define frames-remaining (- sound-frames t))
-    (define frames-to-copy (max 0 
-                                (min buffer-frames
-                                     frames-remaining)))
-    (memcpy buf (ptr-add (s16vector->cpointer s16vec)
-                         (* channels offset) 
-                         _sint16)
-            (* channels frames-to-copy)
-            _sint16)
-    (when (< frames-to-copy buffer-frames)
-      (memset (ptr-add buf (* channels frames-to-copy) _sint16)
-              0
-              (* channels (- buffer-frames frames-to-copy))
-              _sint16)
-      (thread 
-       (lambda ()
-         (and (unbox stopper-box)
-              ((unbox stopper-box)))))))
-  (match-define (list timer stopper)
-    (stream-play/unsafe feeder default-buffer-frames sample-rate))
-  (set-box! stopper-box stopper)
+  (define sound-frames (- stop-frame start-frame))  
+  (pa-maybe-initialize)
+  (define copying-info (make-copying-info s16vec start-frame stop-frame))
+  (define sr/i (exact->inexact sample-rate))
+  (define stream
+    (pa-open-default-stream
+     0             ;; input channels
+     2             ;; output channels
+     'paInt16      ;; sample format
+     sr/i          ;; sample rate
+     default-buffer-frames ;;frames-per-buffer
+     copying-callback ;; callback (NULL means just wait for data)
+     copying-info))
+  (pa-set-stream-finished-callback stream copying-info-free)
+  (pa-start-stream stream)
+  (define (stopper)
+    (pa-maybe-stop-stream stream))
   stopper)
 
 (define (check-args vec total-frames start-frame stop-frame)

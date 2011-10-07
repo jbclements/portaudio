@@ -30,16 +30,18 @@
   (and (exact-integer? n)
        (<= 0 n)))
 
+(define nat? exact-nonnegative-integer?)
+
 (provide/contract 
  ;; make a sndplay record for playing a precomputed sound.
- [make-sndplay-record (c-> s16vector? cpointer?)]
+ [make-copying-info (c-> s16vector? nat? (or/c false? nat?) cpointer?)]
  ;; the raw pointer to the copying callback, for use with
  ;; a sndplay record:
  [copying-callback cpointer?]
- ;; stop a sound, using the thunk stored in the hash table
- [stop-sound (c-> cpointer? void?)]
+ ;; the free function for a copying callback
+ [copying-info-free cpointer?]
  ;; make a streamplay record for playing a stream.
- [make-streamplay-record (c-> integer? (list/c cpointer? place?))]
+ [make-streaming-info (c-> integer? (list/c cpointer? place?))]
  ;; if a streaming sound needs a buffer, returns the necessary
  ;; info
  [buffer-if-waiting (c-> cpointer? (or/c false? (list/c cpointer?
@@ -52,8 +54,6 @@
  ;; how many times has a given stream failed (i.e. not had a 
  ;; buffer provided in time by racket)?
  [stream-fails (c-> cpointer? integer?)]
- ;; the free function for a copying callback
- [copying-info-free cpointer?]
  ;; the free function for a streaming callback
  [streaming-info-free cpointer?])
 
@@ -69,6 +69,66 @@
    [numSamples    _ulong]
    [stop-now      _bool]
    [stop-sema-ptr _pointer]))
+
+#|
+// MOVE THIS INTO RACKET WHEN YOU GET TIME! :
+// copySound: just copy the whole darn sound into a freshly malloc'ed chunk.
+// not great, but solves *all* of the problems interacting with GC
+soundCopyingInfo *createClosure(short *data,
+                                unsigned long samples,
+                                Scheme_Object **stoppedPtr) {
+
+  size_t numSoundBytes = (SAMPLEBYTES * samples);
+  short *copiedSound = malloc(numSoundBytes);
+
+  if (copiedSound == NULL) {
+    return(NULL);
+  } else {
+    memcpy((void *)copiedSound,(void *)data,numSoundBytes);
+
+    soundCopyingInfo *result = malloc(sizeof(soundCopyingInfo));
+
+    if (result == NULL) {
+      free(copiedSound);
+      return(NULL);
+    } else {
+      result->sound = copiedSound;
+      result->curSample = 0;
+      result->numSamples = samples;
+      result->stopNow = 0;
+      result->stoppedPtr = stoppedPtr;
+      return(result);
+    }
+  }
+}
+
+|#
+
+;; create a fresh copied-sound-info structure, including a full
+;; malloc'ed copy of the sound data. No sanity checking of start
+;; & stop is done.
+(define (make-copying-info s16vec start-frame maybe-stop-frame)
+  (define stop-frame (or maybe-stop-frame
+                         (/ (s16vector-length s16vec) channels)))
+  ;; actually, we can get rid of this real soon now.
+  ;; will never get freed.... but 4 bytes lost should be okay.
+  (define already-freed? (malloc-immobile-cell #f))
+  (define copying-info (define info (cast (malloc _copying-rec 'raw)
+                                          _pointer
+                                          _copying-rec-pointer)))
+  (define frames-to-copy (- stop-frame start-frame))
+  (define copied-sound (malloc _sint16 (* channels frames-to-copy) 'raw))
+  (define src-ptr (ptr-add (s16vector->cpointer s16vec)
+                           (* channels start-frame)
+                           _sint16))
+  (memcpy copied-sound src-ptr (* channels frames-to-copy) _sint16)
+  ;; do the rest of the set!ing here....
+  (unless sndplay-record
+    (error 'make-sndplay-record
+           "failed to allocate space for ~s samples."
+           (s16vector-length s16vec)))
+  sndplay-record)
+
 
 ;; STREAMING CALLBACK STRUCT
 (define streambufs 4)
@@ -93,25 +153,9 @@
 ;; how many fails have occurred on the stream?
 (define (stream-fails stream-rec)
   (stream-rec-fault-count stream-rec))
-
-;; create a fresh copied-sound-info structure, including a full
-;; malloc'ed copy of the sound data
-(define (make-sndplay-record s16vec)
-  ;; will never get freed.... but 4 bytes lost should be okay.
-  (define already-freed? (malloc-immobile-cell #f))
-  (define sndplay-record
-    (create-closure/raw (s16vector->cpointer s16vec) 
-                        (s16vector-length s16vec)
-                        already-freed?))
-  (unless sndplay-record
-    (error 'make-sndplay-record
-           "failed to allocate space for ~s samples."
-           (s16vector-length s16vec)))
-  sndplay-record)
-
 ;; create a fresh streaming-sound-info structure, including
 ;; four buffers to be used in rendering the sound.
-(define (make-streamplay-record buffer-frames)
+(define (make-streaming-info buffer-frames)
   ;; will never get freed.... but a few bytes lost should be okay....
   (define mzrt-sema (mzrt-sema-create 0))
   (define info (cast (malloc _stream-rec 'raw)
@@ -127,10 +171,6 @@
   (set-stream-rec-fault-count! info 0)
   (set-stream-rec-buffer-needed-sema! info mzrt-sema)
   (define listening-place (mzrt-sema-listener mzrt-sema))
-  (hash-set! sound-stopping-table info
-             (list (make-semaphore 1)
-                   (lambda ()
-                     (place-kill listening-place))))
   (list info listening-place))
 
 
@@ -156,21 +196,6 @@
                  (array-set! buf-numbers
                              buffer-index
                              next-to-be-used)))]))
-
-;; stop a sound
-;; EFFECT: stops the stream, unless it's already done.
-(define (stop-sound streamplay-info)
-  (match (hash-ref sound-stopping-table streamplay-info #f)
-    [#f (error 'stop-sound "record had no entry in the stopping table")]
-    [(list sema stop-thunk)
-     #;(printf "stopping!\n")
-     (match (semaphore-try-wait? sema)
-       ;; sound has already been stopped
-       [#f (void)]
-       [#t (stop-thunk)])]))
-
-;; the same pointer may be allocated again, so use hasheq:
-(define sound-stopping-table (make-hasheq))
 
 ;; FFI OBJECTS FROM THE C CALLBACK LIBRARY
 

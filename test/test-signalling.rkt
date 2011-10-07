@@ -10,7 +10,7 @@
  (lambda ()
    (let loop ()
      (place-channel-get place)
-     (printf "got one!\n")
+     (printf "post: ~s\n" (current-inexact-milliseconds))
      (loop))))
 
 ;; when run, a "got one!"
@@ -19,4 +19,6 @@
 (for ([i (in-range 5)])
   (sleep 1.0)
   (printf "posting...\n")
-  (mzrt-sema-post s))
+  (define pre (current-inexact-milliseconds))
+  (mzrt-sema-post s)
+  (printf "pre: ~s\n" pre))

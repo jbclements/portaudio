@@ -19,9 +19,14 @@
     (place 
      ch
      (define mzrt-sema (place-channel-get ch))
+     (place-channel-put ch 'ready)
      (let loop ()
        (mzrt-sema-wait mzrt-sema)
-       (place-channel-put ch #t)
+       (place-channel-put ch 'signal)
        (loop))))
   (place-channel-put p mzrt-sema)
+  ;; wait for the place to come up:
+  (define up (place-channel-get p))
+  (unless (eq? up 'ready)
+    (error 'mzrt-sema-listener "failed to initialize place correctly"))
   p)

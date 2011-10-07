@@ -2,7 +2,7 @@
 
 (require ffi/unsafe
          "portaudio.rkt"
-         "portaudio-utils.rkt"
+         "callback-support.rkt"
          (rename-in racket/contract [-> c->]))
 
 (define nat? exact-nonnegative-integer?)

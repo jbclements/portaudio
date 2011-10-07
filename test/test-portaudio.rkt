@@ -1,9 +1,8 @@
 #lang racket
 
 (require "../portaudio.rkt"
-         "../portaudio-utils.rkt"
+         "../callback-support.rkt"
          "helpers.rkt"
-         ffi/vector
          rackunit
          rackunit/text-ui)
 
@@ -82,10 +81,9 @@
   ;; first, test the copying-callback.
 
   
-  ;; first test with the vector interface:
   (let ()
     (define abort-box (box #f))
-    (define callback-info (make-sndplay-record tone-buf-330))
+    (define callback-info (make-copying-info tone-buf-330 0 #f))
     (define stream (open-test-stream copying-callback callback-info))
     (pa-set-stream-finished-callback stream copying-info-free)
     (check-equal? (pa-stream-stopped? stream) #t)
@@ -106,11 +104,11 @@
   (let ()
     (define stream-1 (open-test-stream 
                       copying-callback
-                      (make-sndplay-record tone-buf-330)))
+                      (make-copying-info tone-buf-330 0 #f)))
     (pa-set-stream-finished-callback stream-1 copying-info-free)
     (define stream-2 (open-test-stream
                       copying-callback
-                      (make-sndplay-record tone-buf-380)))
+                      (make-copying-info tone-buf-380 0 #f)))
     (pa-set-stream-finished-callback stream-2 copying-info-free)
     (printf "1/2 second @ 330 & 380 Hz\n")
     (test-start)
@@ -124,7 +122,7 @@
   
   ;; ending a stream with stop-stream
   (let ()
-    (define info (make-sndplay-record longer-tone-buf))
+    (define info (make-copying-info longer-tone-buf 0 #f))
     (define stream-1 (open-test-stream 
                       copying-callback
                       info))
@@ -140,7 +138,7 @@
   
   ;; try stopping a sound 3 times:
   (let ()
-    (define info (make-sndplay-record longer-tone-buf))
+    (define info (make-copying-info longer-tone-buf 0 #f))
     (define stream-1 (open-test-stream 
                       copying-callback
                       info))
@@ -156,7 +154,7 @@
   
   ;; try stopping a sound that's already over:
   (let ()
-    (define info (make-sndplay-record tone-buf-380))
+    (define info (make-copying-info tone-buf-380 0 #f))
     (define stream-1 (open-test-stream 
                       copying-callback
                       info))

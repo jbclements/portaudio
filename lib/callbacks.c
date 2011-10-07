@@ -35,37 +35,6 @@ typedef struct soundStreamInfo{
 void freeClosure(soundCopyingInfo *ri);
 void freeStreamingInfo(soundStreamInfo *ssi);
 
-// MOVE THIS INTO RACKET WHEN YOU GET TIME! :
-// copySound: just copy the whole darn sound into a freshly malloc'ed chunk.
-// not great, but solves *all* of the problems interacting with GC
-soundCopyingInfo *createClosure(short *data,
-                                unsigned long samples,
-                                Scheme_Object **stoppedPtr) {
-
-  size_t numSoundBytes = (SAMPLEBYTES * samples);
-  short *copiedSound = malloc(numSoundBytes);
-
-  if (copiedSound == NULL) {
-    return(NULL);
-  } else {
-    memcpy((void *)copiedSound,(void *)data,numSoundBytes);
-
-    soundCopyingInfo *result = malloc(sizeof(soundCopyingInfo));
-
-    if (result == NULL) {
-      free(copiedSound);
-      return(NULL);
-    } else {
-      result->sound = copiedSound;
-      result->curSample = 0;
-      result->numSamples = samples;
-      result->stopNow = 0;
-      result->stoppedPtr = stoppedPtr;
-      return(result);
-    }
-  }
-}
-
 
 
 // simplest possible feeder; copy bytes until you run out.
