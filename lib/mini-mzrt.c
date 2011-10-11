@@ -32,6 +32,25 @@ struct mzrt_sema {
 
 typedef struct mzrt_sema mzrt_sema;
 
+int mzrt_sema_create(mzrt_sema **_s, int v)
+{
+  mzrt_sema *s;
+  HANDLE ws;
+
+  s = (mzrt_sema *)malloc(sizeof(mzrt_sema));
+  ws = CreateSemaphore(NULL, v, 32000, NULL);
+  s->ws = ws;
+  *_s = s;
+
+  return 0;
+}
+
+int mzrt_sema_wait(mzrt_sema *s)
+{
+  WaitForSingleObject(s->ws, INFINITE);
+  return 0;
+}
+
 int mzrt_sema_post(mzrt_sema *s)
 {
   ReleaseSemaphore(s->ws, 1, NULL);  
