@@ -2,7 +2,7 @@
 
 (require "../stream-play.rkt"
          ffi/unsafe
-         (planet williams/science/statistics))
+         #;(planet williams/science/statistics))
 
 (define srinv (/ 1.0 44100))
 (define twopi (* 2 pi))
@@ -42,8 +42,8 @@
 (stopper)
 
 ;; fails
-(length (filter not log1))
-(mean-and-variance (filter (lambda (x) x) log1))
+(printf "fails: ~s\n" (length (filter not log1)))
+#;(mean-and-variance (filter (lambda (x) x) log1))
 
 
 (define (buffer-filler/unsafe ptr len idx)

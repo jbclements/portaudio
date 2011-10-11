@@ -94,16 +94,45 @@
   (set-copying-rec-num-samples! copying-info (* frames-to-copy channels))
   copying-info)
 
+;; REMOVE THIS HACK ONCE _ARRAY IS PART OF THE MAINSTREAM:
+(define-cstruct _array-hack
+  ([a _pointer]
+   [b _pointer]
+   [c _pointer]
+   [d _pointer]))
+(define-cstruct _array-hack-2
+  ([a _int]
+   [b _int]
+   [c _int]
+   [d _int]))
+(define (hack-array-ref array idx)
+  (define array-reffer
+    (case idx
+      [(0) array-hack-a]
+      [(1) array-hack-b]
+      [(2) array-hack-c]
+      [(3) array-hack-d]))
+  (array-reffer array))
+(define (hack-array-ref-2 array idx)
+  (define array-reffer
+    (case idx
+      [(0) array-hack-2-a]
+      [(1) array-hack-2-b]
+      [(2) array-hack-2-c]
+      [(3) array-hack-2-d]))
+  (array-reffer array))
 
 ;; STREAMING CALLBACK STRUCT
+
+;; DON'T CHANGE STREAMBUFS WHILE ARRAY-HACK IS IN PLACE
 (define streambufs 4)
 (define-cstruct _stream-rec
   ([buffer-frames _int]
    ;; the buffers used by the filling process:
-   [buffers (_array _pointer streambufs)]
+   [buffers _array-hack #;(_array _pointer streambufs)]
    ;; the index of the buffer last placed
    ;; in this slot by the filling process:
-   [buf-numbers (_array _int streambufs)]
+   [buf-numbers _array-hack-2 #;(_array _int streambufs)]
    ;; the index of the buffer last copied
    ;; out by the callback:
    [last-used _int]
@@ -127,11 +156,28 @@
                      _pointer
                      _stream-rec-pointer))
   (set-stream-rec-buffer-frames! info buffer-frames)
-  (for ([i (in-range streambufs)])
-    (array-set! (stream-rec-buffers info) 
+  (define buffers (stream-rec-buffers info))
+  (define buffer-nums (stream-rec-buf-numbers info))
+  ;; CAN'T USE THIS IN 5.1.3, MUST USE HACK INSTEAD:
+  #;(for ([i (in-range streambufs)])
+    (array-set! buffers
                 i
                 (malloc _sint16 (* buffer-frames channels) 'raw))
-    (array-set! (stream-rec-buf-numbers info) i -1))
+    (array-set! buffer-nums i -1))
+  ;; HERE'S THE HACK:
+  (set-array-hack-a! buffers
+                     (malloc _sint16 (* buffer-frames channels) 'raw))
+  (set-array-hack-b! buffers
+                     (malloc _sint16 (* buffer-frames channels) 'raw))
+  (set-array-hack-c! buffers
+                     (malloc _sint16 (* buffer-frames channels) 'raw))
+  (set-array-hack-d! buffers
+                     (malloc _sint16 (* buffer-frames channels) 'raw))
+  (set-array-hack-2-a! buffer-nums -1)
+  (set-array-hack-2-b! buffer-nums -1)
+  (set-array-hack-2-c! buffer-nums -1)
+  (set-array-hack-2-d! buffer-nums -1)
+  ;; END OF HACK.
   (set-stream-rec-last-used! info -1)
   (set-stream-rec-fault-count! info 0)
   (set-stream-rec-buffer-needed-sema! info mzrt-sema)
@@ -144,23 +190,32 @@
   (define next-to-be-used (add1 (stream-rec-last-used stream-info)))
   (define buf-numbers (stream-rec-buf-numbers stream-info))
   (define buffer-index (modulo next-to-be-used streambufs))
-  (cond [(= (array-ref buf-numbers buffer-index)
+  (cond [(= (hack-array-ref-2 buf-numbers buffer-index)
             next-to-be-used)
          ;; already present:
          #f]
         [else (list 
                ;; the pointer to the next buffer:
-               (array-ref (stream-rec-buffers stream-info)
-                          buffer-index)
+               (hack-array-ref (stream-rec-buffers stream-info)
+                               buffer-index)
                ;; the length of the buffer:
                (stream-rec-buffer-frames stream-info)
                ;; the index of the next buffer:
                next-to-be-used
                ;; a thunk to use to indicate it's ready:
                (lambda ()
-                 (array-set! buf-numbers
+                 ;; CAN'T DO THIS IN 5.1.3, USE HACK:
+                 #;(array-set! buf-numbers
                              buffer-index
-                             next-to-be-used)))]))
+                             next-to-be-used)
+                 ;; HERE'S THE HACK:
+                 (define updater!
+                   (case buffer-index
+                     [(0) set-array-hack-2-a!]
+                     [(1) set-array-hack-2-b!]
+                     [(2) set-array-hack-2-c!]
+                     [(3) set-array-hack-2-d!]))
+                 (updater! buf-numbers next-to-be-used)))]))
 
 ;; FFI OBJECTS FROM THE C CALLBACK LIBRARY
 
