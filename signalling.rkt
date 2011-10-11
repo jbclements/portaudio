@@ -1,6 +1,8 @@
 #lang racket/base
 
 (require "mzrt-sema.rkt"
+         "horrible-pointer-hack.rkt"
+         ffi/unsafe ;; only required for the horrible hack....
          racket/place)
 
 
@@ -19,13 +21,20 @@
   (define p 
     (place 
      ch
-     (define mzrt-sema (place-channel-get ch))
+     ;; in 5.1.3 and below, need to cheat 
+     ;; to get the pointer through the channel:
+     (define mzrt-sema 
+       (cast (num->pointer (place-channel-get ch))
+             _pointer
+             _mzrt-semaphore))
      (place-channel-put ch 'ready)
      (let loop ()
        (mzrt-sema-wait mzrt-sema)
        (place-channel-put ch 'signal)
        (loop))))
-  (place-channel-put p mzrt-sema)
+  ;; in 5.1.3 and below, need to cheat
+  ;; to get the pointer through the channel
+  (place-channel-put p (pointer->num mzrt-sema))
   ;; wait for the place to come up:
   (define up (place-channel-get p))
   (unless (eq? up 'ready)
