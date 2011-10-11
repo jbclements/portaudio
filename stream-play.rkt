@@ -1,6 +1,8 @@
-#lang racket
+#lang racket/base
 
-(require ffi/unsafe
+(require racket/match
+         racket/place
+         ffi/unsafe
          "portaudio.rkt"
          "callback-support.rkt"
          (rename-in racket/contract [-> c->]))

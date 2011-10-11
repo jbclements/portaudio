@@ -1,6 +1,7 @@
 #lang racket/base
 
-(require ffi/unsafe)
+(require ffi/unsafe
+         racket/runtime-path)
 ;; The mzrt-sema functions work with OS threads. Unfortunately,
 ;; they also block whole OS threads, so you need to use them carefully.
 ;; In particular, if you're going to do a sema-wait, you'd better do
@@ -10,14 +11,27 @@
 
 (provide (all-defined-out))
 
-;; FFI OBJECTS FROM THE SCHEME LIBRARY
-(define schemelib (ffi-lib #f))
+;; FFI OBJECTS.
+
+;; under Mac OS X and Linux, these are exported from 
+;; the main Racket library. Under Windows, I've manually
+;; extracted and re-exported them as part of the callbacks
+;; dll.
+
+(define-runtime-path libpath "./lib")
+
+(define racketlib 
+  (cond [(eq? (system-type) 'windows)
+         (ffi-lib (build-path libpath
+                              (system-library-subpath)
+                              "callbacks"))]
+        [else (ffi-lib #f)]))
 
 (define-cpointer-type _mzrt-semaphore)
 
 (define mzrt-sema-create
   (get-ffi-obj "mzrt_sema_create"
-               #f
+               racketlib
                (_fun (sema-ptr : (_ptr o _mzrt-semaphore))
                      _int
                      -> (err-code : _int)
@@ -28,7 +42,7 @@
 
 (define mzrt-sema-wait
   (get-ffi-obj "mzrt_sema_wait"
-               #f
+               racketlib
                (_fun _mzrt-semaphore
                      -> (err-code : _int)
                      -> (cond [(= err-code 0) (void)]
@@ -38,7 +52,7 @@
 
 (define mzrt-sema-post
   (get-ffi-obj "mzrt_sema_post"
-               #f
+               racketlib
                (_fun _mzrt-semaphore
                      -> (err-code : _int)
                      -> (cond [(= err-code 0) (void)]

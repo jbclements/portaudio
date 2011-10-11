@@ -2,7 +2,6 @@
 
 (require "../portaudio.rkt"
          "../callback-support.rkt"
-         "../signalling.rkt"
          "helpers.rkt"
          ffi/vector
          ffi/unsafe
@@ -52,8 +51,7 @@
       (define sample (inexact->exact (round (* 32767 (* 0.2 (sin (* twopi t 403)))))))
       (define sample-idx (* channels i))
       (ptr-set! ptr _sint16 sample-idx sample)
-      (ptr-set! ptr _sint16 (add1 sample-idx) sample))
-    (sleep 0.001))
+      (ptr-set! ptr _sint16 (add1 sample-idx) sample)))
   
   (define (call-fill-buf streaming-info-ptr)
     (match (buffer-if-waiting streaming-info-ptr)

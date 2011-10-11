@@ -1,9 +1,10 @@
-#lang racket
+#lang racket/base
 
 (require ffi/vector
          ffi/unsafe
          (rename-in racket/contract [-> c->])
          racket/runtime-path
+         racket/place
          "mzrt-sema.rkt"
          "signalling.rkt"
          "portaudio.rkt")
@@ -31,6 +32,7 @@
        (<= 0 n)))
 
 (define nat? exact-nonnegative-integer?)
+(define false? not)
 
 (provide/contract 
  ;; make a sndplay record for playing a precomputed sound.
