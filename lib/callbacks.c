@@ -1,7 +1,9 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#ifndef WIN32
 #include <scheme.h>
+#endif
 #include "portaudio.h"
 
 typedef struct soundCopyingInfo{

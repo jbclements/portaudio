@@ -30,6 +30,8 @@ struct mzrt_sema {
   HANDLE ws;
 };
 
+typedef struct mzrt_sema mzrt_sema;
+
 int mzrt_sema_post(mzrt_sema *s)
 {
   ReleaseSemaphore(s->ws, 1, NULL);  
