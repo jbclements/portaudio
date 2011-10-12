@@ -32,10 +32,8 @@ typedef struct soundStreamInfo{
 #define MYMIN(a,b) ((a)<(b) ? (a) : (b))
 
 
-void freeClosure(soundCopyingInfo *ri);
+void freeCopyingInfo(soundCopyingInfo *ri);
 void freeStreamingInfo(soundStreamInfo *ssi);
-
-
 
 // simplest possible feeder; copy bytes until you run out.
 // assumes 16-bit ints, 2 channels.
