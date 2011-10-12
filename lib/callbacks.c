@@ -116,7 +116,7 @@ int streamingCallback(
 
 // clean up when done:  free the sound data and the
 // closure data
-void freeClosure(soundCopyingInfo *ri){
+void freeCopyingInfo(soundCopyingInfo *ri){
   free(ri->sound);
   free(ri);
 }
