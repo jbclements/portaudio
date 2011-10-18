@@ -144,3 +144,12 @@ void freeStreamingInfo(soundStreamInfo *ssi){
   mzrt_sema_destroy(ssi->bufferNeeded);
   free(ssi);
 }
+
+// this is just a stub to call malloc.
+// it's necessary on windows, to ensure
+// that the free & malloc used on the
+// sound info blocks are associated
+// with the same library.
+void *dll_malloc(size_t bytes){
+	return malloc(bytes);
+}
