@@ -244,7 +244,7 @@
 
 (define copying-info-free
   (cast
-   (get-ffi-obj "freeClosure" callbacks-lib _bogus-struct)
+   (get-ffi-obj "freeCopyingInfo" callbacks-lib _bogus-struct)
    _bogus-struct-pointer
    _pa-stream-finished-callback))
 
