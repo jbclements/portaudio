@@ -1,7 +1,20 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#ifndef WIN32
+#ifdef WIN32
+# include <windows.h>
+# include <process.h>
+
+struct mzrt_sema {
+  HANDLE ws;
+};
+
+typedef struct mzrt_sema mzrt_sema;
+int mzrt_sema_post(mzrt_sema *s);
+int mzrt_sema_destroy(mzrt_sema *s);
+
+#else
+
 #include <scheme.h>
 #endif
 #include "portaudio.h"
