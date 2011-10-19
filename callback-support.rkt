@@ -78,15 +78,12 @@
                          (/ (s16vector-length s16vec) channels)))
   (define frames-to-copy (- stop-frame start-frame))
   ;; do this allocation first: it's much bigger, and more likely to fail:
-  (define copied-sound (malloc _sint16 (* channels frames-to-copy) 'raw))
+  (define copied-sound (dll-malloc (* (ctype-sizeof _sint16) (* channels frames-to-copy))))
   (define src-ptr (ptr-add (s16vector->cpointer s16vec)
                            (* channels start-frame)
                            _sint16))
   (memcpy copied-sound src-ptr (* channels frames-to-copy) _sint16)
-  ;; actually, we can get rid of this real soon now.
-  ;; will never get freed.... but 4 bytes lost should be okay.
-  (define already-freed? (malloc-immobile-cell #f))
-  (define copying-info (cast (malloc _copying-rec 'raw)
+  (define copying-info (cast (dll-malloc (ctype-sizeof _copying-rec))
                              _pointer
                              _copying-rec-pointer))
   (set-copying-rec-sound! copying-info copied-sound)
@@ -152,7 +149,7 @@
 (define (make-streaming-info buffer-frames)
   ;; will never get freed.... but a few bytes lost should be okay....
   (define mzrt-sema (mzrt-sema-create 0))
-  (define info (cast (malloc _stream-rec 'raw)
+  (define info (cast (dll-malloc (ctype-sizeof _stream-rec))
                      _pointer
                      _stream-rec-pointer))
   (set-stream-rec-buffer-frames! info buffer-frames)
@@ -162,17 +159,17 @@
   #;(for ([i (in-range streambufs)])
     (array-set! buffers
                 i
-                (malloc _sint16 (* buffer-frames channels) 'raw))
+                (dll-malloc (* (ctype-sizeof _sint16) (* buffer-frames channels))))
     (array-set! buffer-nums i -1))
   ;; HERE'S THE HACK:
   (set-array-hack-a! buffers
-                     (malloc _sint16 (* buffer-frames channels) 'raw))
+                     (dll-malloc (* (ctype-sizeof _sint16) buffer-frames channels)))
   (set-array-hack-b! buffers
-                     (malloc _sint16 (* buffer-frames channels) 'raw))
+                     (dll-malloc (* (ctype-sizeof _sint16) buffer-frames channels)))
   (set-array-hack-c! buffers
-                     (malloc _sint16 (* buffer-frames channels) 'raw))
+                     (dll-malloc (* (ctype-sizeof _sint16) buffer-frames channels)))
   (set-array-hack-d! buffers
-                     (malloc _sint16 (* buffer-frames channels) 'raw))
+                     (dll-malloc (* (ctype-sizeof _sint16) buffer-frames channels)))
   (set-array-hack-2-a! buffer-nums -1)
   (set-array-hack-2-b! buffer-nums -1)
   (set-array-hack-2-c! buffer-nums -1)
@@ -253,5 +250,8 @@
    (get-ffi-obj "freeStreamingInfo" callbacks-lib _bogus-struct)
    _bogus-struct-pointer
    _pa-stream-finished-callback))
+
+(define dll-malloc
+  (get-ffi-obj "dll_malloc" callbacks-lib (_fun _uint -> _pointer)))
 
 

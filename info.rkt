@@ -11,8 +11,8 @@
 
 (define scribblings '(("portaudio.scrbl" () (tool))))
 (define categories '(media))
-(define version "2011-09-22-23:40")
-(define release-notes '((p "added 64-bit dlls for portaudio & callbacks")))
+(define version "2011-10-11-22:16")
+(define release-notes '((p "Added streaming")))
 
 ;; planet-specific:
 (define repositories '("4.x"))
