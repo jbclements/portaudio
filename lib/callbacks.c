@@ -1,7 +1,20 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#ifndef WIN32
+#ifdef WIN32
+# include <windows.h>
+# include <process.h>
+
+struct mzrt_sema {
+  HANDLE ws;
+};
+
+typedef struct mzrt_sema mzrt_sema;
+int mzrt_sema_post(mzrt_sema *s);
+int mzrt_sema_destroy(mzrt_sema *s);
+
+#else
+
 #include <scheme.h>
 #endif
 #include "portaudio.h"
@@ -130,4 +143,13 @@ void freeStreamingInfo(soundStreamInfo *ssi){
   // this happens.
   mzrt_sema_destroy(ssi->bufferNeeded);
   free(ssi);
+}
+
+// this is just a stub to call malloc.
+// it's necessary on windows, to ensure
+// that the free & malloc used on the
+// sound info blocks are associated
+// with the same library.
+void *dll_malloc(size_t bytes){
+	return malloc(bytes);
 }

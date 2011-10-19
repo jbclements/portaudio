@@ -60,8 +60,8 @@ to call this for sounds that are really big (> 100MB?).
  to halt the sound, if desired. Play is asynchronous: control
  returns as soon as the sound has started playing.
  
- No sanity/error checking is performed on the sanity of the start and
- end frame.
+ This function signals an error if start and end frames are
+ not ordered and legal.
                      
  Here's an example of a short program that plays a sine wave
  at 426 Hz for 2 seconds:
