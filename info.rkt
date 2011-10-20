@@ -11,8 +11,8 @@
 
 (define scribblings '(("portaudio.scrbl" () (tool))))
 (define categories '(media))
-(define version "2011-10-18-09:36")
-(define release-notes '((p "fixed malloc/free under windows")))
+(define version "2011-10-20-09:57")
+(define release-notes '((p "trying to get rid of stray error messages")))
 
 ;; planet-specific:
 (define repositories '("4.x"))
