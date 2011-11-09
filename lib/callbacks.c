@@ -11,7 +11,6 @@ struct mzrt_sema {
 
 typedef struct mzrt_sema mzrt_sema;
 int mzrt_sema_post(mzrt_sema *s);
-int mzrt_sema_destroy(mzrt_sema *s);
 
 #else
 
@@ -37,6 +36,7 @@ typedef struct soundStreamInfo{
   int   lastUsed;
   int   faultCount;
   struct mzrt_sema *bufferNeeded;
+  int   *all_done;
 } soundStreamInfo;
 
 #define CHANNELS 2
@@ -139,9 +139,9 @@ void freeStreamingInfo(soundStreamInfo *ssi){
   for (i = 0; i < STREAMBUFS; i++) {
     free(ssi->buffers[i]);
   }
-  // Racket code must destroy the listener before
-  // this happens.
-  mzrt_sema_destroy(ssi->bufferNeeded);
+  // when all_done is 1, this triggers self-destruct:
+  ssi->all_done = 1;
+  mzrt_sema_post(ssi->bufferNeeded);
   free(ssi);
 }
 

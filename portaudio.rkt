@@ -1239,28 +1239,25 @@ PaError Pa_OpenStream( PaStream** stream,
 
 ;; *** UNTESTED ***:
 
-(define (pa-open-stream #:kill-thunk [kill-thunk #f] . args)
-  (apply
-   (get-ffi-obj "Pa_OpenStream"
-                libportaudio
-                (_fun (result : (_ptr o _pa-stream)) ;; stream
-                      _pa-stream-parameters-pointer ;; inputParameters
-                      _pa-stream-parameters-pointer ;; outputParameters
-                      _double ;; sampleRate
-                      _ulong ;; framesPerBuffer
-                      _pa-stream-flags ;; streamFlags
-                      _pa-stream-callback ;; callback (ptr to C fun)
-                      _pointer ;; userData
-                      -> (err : _pa-error)
-                      -> (match err
-                           ['paNoError
-                            (begin (add-managed result 
-                                                (make-close-stream-callback
-                                                 kill-thunk))
-                                   result)]
-                           [other (error 'pa-open-stream "~a" 
-                                         (pa-get-error-text err))])))
-   args))
+(define pa-open-stream
+  (get-ffi-obj "Pa_OpenStream"
+               libportaudio
+               (_fun (result : (_ptr o _pa-stream)) ;; stream
+                     _pa-stream-parameters-pointer ;; inputParameters
+                     _pa-stream-parameters-pointer ;; outputParameters
+                     _double ;; sampleRate
+                     _ulong ;; framesPerBuffer
+                     _pa-stream-flags ;; streamFlags
+                     _pa-stream-callback ;; callback (ptr to C fun)
+                     _pointer ;; userData
+                     -> (err : _pa-error)
+                     -> (match err
+                          ['paNoError
+                           (begin (add-managed result 
+                                               close-stream-callback)
+                                  result)]
+                          [other (error 'pa-open-stream "~a" 
+                                        (pa-get-error-text err))]))))
 
 
 #| 
@@ -1303,33 +1300,30 @@ PaError Pa_OpenDefaultStream( PaStream** stream,
                               PaStreamCallback *streamCallback,
                               void *userData );
 |#
-(define (pa-open-default-stream #:kill-thunk [kill-thunk #f] . args)
-  (apply
-   (get-ffi-obj "Pa_OpenDefaultStream"
-                libportaudio
-                (_fun (result : (_ptr o _pa-stream)) ;; stream
-                      _int ;; numInputChannels
-                      _int ;; numOutputChannels
-                      _pa-sample-format ;; sampleFormat
-                      _double ;; sampleRate
-                      _ulong ;; framesPerBuffer
-                      _pa-stream-callback ;; callback
-                      _pointer ;; userData?
-                      -> (err : _pa-error)
-                      -> (match err
-                           ['paNoError  
-                            (begin (add-managed result 
-                                                (make-close-stream-callback
-                                                 kill-thunk))
-                                   result)]
-                           [other (error 'pa-open-default-stream "~a" 
-                                         (pa-get-error-text err))])))
-   args))
+(define pa-open-default-stream
+  (get-ffi-obj "Pa_OpenDefaultStream"
+               libportaudio
+               (_fun (result : (_ptr o _pa-stream)) ;; stream
+                     _int ;; numInputChannels
+                     _int ;; numOutputChannels
+                     _pa-sample-format ;; sampleFormat
+                     _double ;; sampleRate
+                     _ulong ;; framesPerBuffer
+                     _pa-stream-callback ;; callback
+                     _pointer ;; userData?
+                     -> (err : _pa-error)
+                     -> (match err
+                          ['paNoError  
+                           (begin (add-managed result 
+                                               close-stream-callback)
+                                  result)]
+                          [other (error 'pa-open-default-stream "~a" 
+                                        (pa-get-error-text err))]))))
 
 
-(define (make-close-stream-callback kill-thunk)
+(define close-stream-callback
   (ffi-callback (lambda (p _)
-                  (pa-maybe-stop-stream p #:kill-thunk kill-thunk))
+                  (pa-maybe-stop-stream p))
                 (list _racket _pointer)
                 _void))
 
@@ -1766,9 +1760,8 @@ void Pa_Sleep( long msec );
 ;; WRAPPERS:
 
 ;; stop unless it's already been stopped.
-(define (pa-maybe-stop-stream stream #:kill-thunk [kill-thunk #f])
+(define (pa-maybe-stop-stream stream)
   (when (pa-stream-active? stream)
-    (when kill-thunk (kill-thunk))
     (pa-stop-stream stream)))
 
 ;; initialize unless it's already been initialized.

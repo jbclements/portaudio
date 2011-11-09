@@ -44,7 +44,7 @@
  ;; the free function for a copying callback
  [copying-info-free cpointer?]
  ;; make a streamplay record for playing a stream.
- [make-streaming-info (c-> integer? (list/c cpointer? place? procedure?))]
+ [make-streaming-info (c-> integer? (list/c cpointer? place?))]
  ;; if a streaming sound needs a buffer, returns the necessary
  ;; info
  [buffer-if-waiting (c-> cpointer? (or/c false? (list/c cpointer?
@@ -139,12 +139,17 @@
    ;; a pointer to an immobile cell containing 
    ;; an mzrt-sema, used to signal when data is
    ;; needed
-   [buffer-needed-sema _pointer]))
+   [buffer-needed-sema _pointer]
+   ;; a pointer to a 4-byte cell; when it's nonzero,
+   ;; the receiving "place" should shut down, freeing
+   ;; the mzrt-sema and this cell.
+   [all-done _pointer]))
 
 
 ;; how many fails have occurred on the stream?
 (define (stream-fails stream-rec)
   (stream-rec-fault-count stream-rec))
+
 ;; create a fresh streaming-sound-info structure, including
 ;; four buffers to be used in rendering the sound.
 (define (make-streaming-info buffer-frames)
@@ -187,8 +192,11 @@
   (set-stream-rec-last-used! info -1)
   (set-stream-rec-fault-count! info 0)
   (set-stream-rec-buffer-needed-sema! info mzrt-sema)
-  (match-define (list listening-place kill-thunk) (mzrt-sema-listener mzrt-sema))
-  (list info listening-place kill-thunk))
+  (define all-done-cell (malloc 'raw 4))
+  (ptr-set! all-done-cell _uint32 0)
+  (set-stream-rec-all-done! info all-done-cell)
+  (define listening-place (mzrt-sema-listener mzrt-sema all-done-cell))
+  (list info listening-place))
 
 
 ;; if a buffer needs to be filled, return the info needed to fill it

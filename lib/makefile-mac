@@ -1,7 +1,7 @@
 all : callbacks.dylib
 
 callbacks.dylib : callbacks.o
-	$(RACO) ctool --ld callbacks.dylib ++ldf -mmacosx-version-min=10.5 callbacks.o
+	raco ctool --ld callbacks.dylib ++ldf -mmacosx-version-min=10.5 callbacks.o
 
 callbacks.o : callbacks.c
-	$(RACO) ctool --cc ++ccf -mmacosx-version-min=10.5 callbacks.c
+	raco ctool --cc ++ccf -mmacosx-version-min=10.5 callbacks.c

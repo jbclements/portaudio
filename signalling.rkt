@@ -20,8 +20,7 @@
 ;; if the "kill" box is set to #t, then 
 ;; posting to the mzrt-sema will cause
 ;; the listener to die.
-(define (mzrt-sema-listener mzrt-sema)
-  (define kill-flag (make-shared-flag))
+(define (mzrt-sema-listener mzrt-sema all-done-cell)
   (define pre (current-inexact-milliseconds))
   (define p 
     (place 
@@ -32,13 +31,14 @@
        (cast (num->pointer (place-channel-get ch))
              _pointer
              _mzrt-semaphore))
-     (define kill-flag
+     (define all-done-cell
        (num->pointer (place-channel-get ch)))
      (place-channel-put ch 'ready)
      (let loop ()
        (mzrt-sema-wait mzrt-sema)
-       (cond [(get-shared-flag kill-flag)
-              (free-shared-flag kill-flag)
+       (cond [(not (= 0 (ptr-ref all-done-cell _uint32)))
+              ;; free things. First make sure this works....
+              (log-debug "received kill signal")
               'done]
              [else
               (place-channel-put ch 'signal)
@@ -46,7 +46,7 @@
   ;; in 5.1.3 and below, need to cheat
   ;; to get the pointer through the channel
   (place-channel-put p (pointer->num mzrt-sema))
-  (place-channel-put p (pointer->num kill-flag))
+  (place-channel-put p (pointer->num all-done-cell))
   ;; wait for the place to come up:
   (define up (place-channel-get p))
   (unless (eq? up 'ready)
@@ -54,7 +54,4 @@
   (define post (current-inexact-milliseconds))
   ;; for debugging, if desired:
   #;(printf "startup time: ~s\n" (- post pre))
-  (list p 
-        (lambda ()
-          (set-shared-flag! kill-flag)
-          (mzrt-sema-post mzrt-sema))))
+  p)
