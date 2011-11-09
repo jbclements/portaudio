@@ -16,8 +16,9 @@
   
   (pa-maybe-initialize)
   
-  (define (open-test-stream callback streaming-info-ptr buffer-frames)
+  (define (open-test-stream callback streaming-info-ptr buffer-frames kill-thunk)
     (pa-open-default-stream
+     #:kill-thunk kill-thunk
      0             ;; input channels
      2             ;; output channels
      'paInt16      ;; sample format
@@ -82,12 +83,13 @@
   ;; first just play silence; there's no process feeding the buffer
   (let ()
     (define buffer-frames 1024)
-    (match-define (list stream-info place-channel)
+    (match-define (list stream-info place-channel kill-thunk)
       (make-streaming-info buffer-frames))
     (check-not-false (buffer-if-waiting stream-info))
     (define stream (open-test-stream streaming-callback
                                      stream-info
-                                     buffer-frames))
+                                     buffer-frames
+                                     kill-thunk))
     (pa-set-stream-finished-callback stream streaming-info-free)
     (thread 
      (lambda ()
@@ -114,11 +116,12 @@
   ;; try playing a tone at 403 Hz:
   (let ()
     (define buffer-frames 1024)
-    (match-define (list stream-info signal-channel)
+    (match-define (list stream-info signal-channel kill-thunk)
       (make-streaming-info buffer-frames))
     (define stream (open-test-stream streaming-callback
                                      stream-info
-                                     buffer-frames))
+                                     buffer-frames
+                                     kill-thunk))
     (pa-set-stream-finished-callback stream streaming-info-free)
     (printf "tone at 403 Hz\n")
     (define filling-thread
