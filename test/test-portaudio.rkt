@@ -131,7 +131,7 @@
     (test-start)
     (pa-start-stream stream-1)
     (sleep 0.5)
-    (pa-stop-stream stream-1)
+    (pa-maybe-stop-stream stream-1)
     (sleep 0.1)
     (check-equal? (pa-stream-active? stream-1) #f)
     (test-end))
@@ -163,7 +163,7 @@
     (test-start)
     (pa-start-stream stream-1)
     (sleep 1.0)
-    (pa-stop-stream stream-1)
+    (pa-maybe-stop-stream stream-1)
     (test-end))
   
   ;; tests for stream-play and s16vec-play....

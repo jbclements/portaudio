@@ -7,7 +7,8 @@
          racket/place
          "mzrt-sema.rkt"
          "signalling.rkt"
-         "portaudio.rkt")
+         "portaudio.rkt"
+         (only-in racket/match match-define))
 
 (define-runtime-path lib "lib/")
 
@@ -43,7 +44,7 @@
  ;; the free function for a copying callback
  [copying-info-free cpointer?]
  ;; make a streamplay record for playing a stream.
- [make-streaming-info (c-> integer? (list/c cpointer? place?))]
+ [make-streaming-info (c-> integer? (list/c cpointer? place? procedure?))]
  ;; if a streaming sound needs a buffer, returns the necessary
  ;; info
  [buffer-if-waiting (c-> cpointer? (or/c false? (list/c cpointer?
@@ -178,8 +179,8 @@
   (set-stream-rec-last-used! info -1)
   (set-stream-rec-fault-count! info 0)
   (set-stream-rec-buffer-needed-sema! info mzrt-sema)
-  (define listening-place (mzrt-sema-listener mzrt-sema))
-  (list info listening-place))
+  (match-define (list listening-place kill-thunk) (mzrt-sema-listener mzrt-sema))
+  (list info listening-place kill-thunk))
 
 
 ;; if a buffer needs to be filled, return the info needed to fill it

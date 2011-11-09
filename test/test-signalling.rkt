@@ -4,7 +4,7 @@
          "../mzrt-sema.rkt")
 
 (define s (mzrt-sema-create 0))
-(define place (mzrt-sema-listener s))
+(match-define (list place kill-thunk) (mzrt-sema-listener s))
 
 (define pre-times '())
 (define post-times '())

@@ -3,7 +3,11 @@
 (require ffi/unsafe)
 
 (provide pointer->num
-         num->pointer)
+         num->pointer
+         make-shared-flag
+         free-shared-flag
+         set-shared-flag!
+         get-shared-flag)
 
 ;; this horrible hack is necessary to make passing pointers 
 ;; possible in 5.1.3; this hack is unnecessary in 5.1.3.9
@@ -25,9 +29,37 @@
 (define (num->pointer num)
   (cast num int-type _pointer))
 
+;; make-shared-flag
+(define (make-shared-flag) 
+  (define ptr (malloc 'raw 4))
+  (ptr-set! ptr _uint32 0)
+  ptr)
 
-;; comment this out... it leaks memory.
+(define (set-shared-flag! flag)
+  (ptr-set! flag _uint32 1))
+
+(define (get-shared-flag flag)
+  (= 1 (ptr-ref flag _uint32)))
+
+;; free-shared-flag
+(define (free-shared-flag ptr)
+  (free ptr))
+
+
+
+
+
+
 (define my-ptr (malloc 14 'raw))
 (unless (equal? my-ptr (num->pointer (pointer->num my-ptr)))
   (error 'horrible-hack "round-tripping is broken."))
 (free my-ptr)
+
+(define new-flag (make-shared-flag))
+(unless (and (not (get-shared-flag new-flag))
+             (not (get-shared-flag new-flag)))
+  (error))
+(set-shared-flag! new-flag)
+(unless (get-shared-flag new-flag)
+  (error))
+(free-shared-flag new-flag)
