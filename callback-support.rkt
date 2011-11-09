@@ -162,14 +162,22 @@
                 (dll-malloc (* (ctype-sizeof _sint16) (* buffer-frames channels))))
     (array-set! buffer-nums i -1))
   ;; HERE'S THE HACK:
-  (set-array-hack-a! buffers
-                     (dll-malloc (* (ctype-sizeof _sint16) buffer-frames channels)))
-  (set-array-hack-b! buffers
-                     (dll-malloc (* (ctype-sizeof _sint16) buffer-frames channels)))
-  (set-array-hack-c! buffers
-                     (dll-malloc (* (ctype-sizeof _sint16) buffer-frames channels)))
-  (set-array-hack-d! buffers
-                     (dll-malloc (* (ctype-sizeof _sint16) buffer-frames channels)))
+  (set-array-hack-a! 
+   buffers
+   (dll-malloc 
+    (* (ctype-sizeof _sint16) buffer-frames channels)))
+  (set-array-hack-b!
+   buffers
+   (dll-malloc
+    (* (ctype-sizeof _sint16) buffer-frames channels)))
+  (set-array-hack-c!
+   buffers
+   (dll-malloc
+    (* (ctype-sizeof _sint16) buffer-frames channels)))
+  (set-array-hack-d!
+   buffers
+   (dll-malloc
+    (* (ctype-sizeof _sint16) buffer-frames channels)))
   (set-array-hack-2-a! buffer-nums -1)
   (set-array-hack-2-b! buffer-nums -1)
   (set-array-hack-2-c! buffer-nums -1)
