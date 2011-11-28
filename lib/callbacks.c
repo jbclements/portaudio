@@ -140,7 +140,7 @@ void freeStreamingInfo(soundStreamInfo *ssi){
     free(ssi->buffers[i]);
   }
   // when all_done is 1, this triggers self-destruct:
-  ssi->all_done = 1;
+  *(ssi->all_done) = 1;
   mzrt_sema_post(ssi->bufferNeeded);
   free(ssi);
 }
