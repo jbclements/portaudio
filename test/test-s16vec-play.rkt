@@ -50,7 +50,16 @@
   (check-exn exn:fail?
              (lambda ()
                (s16vec-play v 10000 0 44100)))
-
+  ;; simultaneous play:
+  
+  (printf "10 near-simultaneous copies of the sound")
+  (sleep 2)
+  (printf "start...\n")
+  (for ([i (in-range 10)])
+    (check-not-exn (lambda () (s16vec-play v 0 #f 44100)))
+    (sleep 0.03))
+  (sleep 0.5)
+  (printf "...stop.\n")
   
 
   )))
