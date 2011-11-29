@@ -1,10 +1,14 @@
 #lang racket
 
 (require "../signalling.rkt"
-         "../mzrt-sema.rkt")
+         "../mzrt-sema.rkt"
+         ffi/unsafe)
 
 (define s (mzrt-sema-create 0))
-(match-define (list place kill-thunk) (mzrt-sema-listener s))
+
+(define all-done-cell (malloc 'raw 4))
+(ptr-set! all-done-cell _uint32 0)
+(define place (mzrt-sema-listener s all-done-cell))
 
 (define pre-times '())
 (define post-times '())
@@ -20,7 +24,7 @@
 (define trials 40)
 
 (for ([i (in-range trials)])
-  (sleep 1.0)
+  (sleep 0.25)
   (when (= 0 (modulo i 5))
     (printf "~a\n" (format "posting(~s/~s)..." i trials)))
   (define pre (current-inexact-milliseconds))
@@ -48,3 +52,11 @@
         intervals
         (mean intervals)
         (stdevp intervals))
+
+;; test killing a place ... you have to have log-debug on
+;; to see this test succeed.
+(printf "when -W debug is on, you should see a \"received kill signal\" message here\n")
+(ptr-set! all-done-cell _uint32 23)
+(mzrt-sema-post s)
+(sleep 1.0)
+
