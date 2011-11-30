@@ -101,23 +101,28 @@ int streamingCallback(
 
   soundStreamInfo *ssi = (soundStreamInfo *)userData;
 
-  if (frameCount > (ssi->bufferFrames / 2)) {
-    fprintf(stderr,"system requested %ld bytes, too many for buffer of length %d\n",
-            frameCount, ssi->bufferFrames);
-    return(paAbort);
-  }
-
   unsigned int lastFrameRequested = ssi->lastFrameRead + frameCount;
   unsigned int lastFrameToCopy = MYMAX(ssi->lastFrameRead,MYMIN(lastFrameRequested,ssi->lastFrameWritten));
   unsigned int framesToCopy = lastFrameToCopy - ssi->lastFrameRead;
   unsigned int bytesToCopy = FRAMES_TO_BYTES(framesToCopy);
   unsigned int lastOffsetToCopy = ssi->lastOffsetRead + bytesToCopy;
   unsigned int bufferBytes = FRAMES_TO_BYTES(ssi->bufferFrames);
+  // stupid windows. I bet there's some way to get around this restriction.
+  unsigned int bytesInEnd;
+  unsigned int bytesAtBeginning;
+  
+  if (frameCount > (ssi->bufferFrames / 2)) {
+    fprintf(stderr,"system requested %ld bytes, too many for buffer of length %d\n",
+            frameCount, ssi->bufferFrames);
+    return(paAbort);
+  }
+
+
   if (lastOffsetToCopy > bufferBytes) {
     // break it into two pieces:
-    unsigned int bytesInEnd = bufferBytes - ssi->lastOffsetRead;
+    bytesInEnd = bufferBytes - ssi->lastOffsetRead;
     memcpy(output,(void *)(ssi->buffer)+(ssi->lastOffsetRead),bytesInEnd);
-    unsigned int bytesAtBeginning = bytesToCopy - bytesInEnd;
+    bytesAtBeginning = bytesToCopy - bytesInEnd;
     memcpy(output+bytesInEnd,(void *)ssi->buffer,bytesAtBeginning);
   } else {
     // otherwise just copy it all at once:
