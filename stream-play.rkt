@@ -31,12 +31,11 @@
 ;; needed.
 (define (stream-play/unsafe buffer-filler buffer-frames sample-rate)
   (pa-maybe-initialize)
-  (match-define (list stream-info signal-channel kill-thunk)
+  (match-define (list stream-info signal-channel)
     (make-streaming-info buffer-frames))
   (define sr/i (exact->inexact sample-rate))
   (define stream
     (pa-open-default-stream
-     #:kill-thunk kill-thunk
      0             ;; input channels
      2             ;; output channels
      'paInt16      ;; sample format

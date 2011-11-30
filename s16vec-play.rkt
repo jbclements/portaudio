@@ -6,7 +6,7 @@
          "portaudio.rkt"
          "callback-support.rkt")
 
-
+;; this module provides a function that plays a sound.
 
 (define nat? exact-nonnegative-integer?)
 
@@ -34,7 +34,7 @@
      2             ;; output channels
      'paInt16      ;; sample format
      sr/i          ;; sample rate
-     default-buffer-frames ;;frames-per-buffer
+     0             ;;frames-per-buffer
      copying-callback ;; callback (NULL means just wait for data)
      copying-info))
   (pa-set-stream-finished-callback stream copying-info-free)
