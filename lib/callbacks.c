@@ -1,21 +1,6 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#ifdef WIN32
-# include <windows.h>
-# include <process.h>
-
-struct mzrt_sema {
-  HANDLE ws;
-};
-
-typedef struct mzrt_sema mzrt_sema;
-int mzrt_sema_post(mzrt_sema *s);
-
-#else
-
-#include <scheme.h>
-#endif
 #include "portaudio.h"
 
 typedef struct soundCopyingInfo{
@@ -26,7 +11,7 @@ typedef struct soundCopyingInfo{
 } soundCopyingInfo;
 
 typedef struct soundStreamInfo{
-  int   bufferFrames;
+  unsigned int   bufferFrames;
   char *buffer;
 
   unsigned int lastFrameRead;
@@ -111,7 +96,7 @@ int streamingCallback(
   unsigned int bytesInEnd;
   unsigned int bytesAtBeginning;
   
-  if (frameCount > (ssi->bufferFrames / 2)) {
+  if (frameCount > (unsigned long)(ssi->bufferFrames / 2)) {
     fprintf(stderr,"system requested %ld bytes, too many for buffer of length %d\n",
             frameCount, ssi->bufferFrames);
     return(paAbort);
@@ -121,16 +106,16 @@ int streamingCallback(
   if (lastOffsetToCopy > bufferBytes) {
     // break it into two pieces:
     bytesInEnd = bufferBytes - ssi->lastOffsetRead;
-    memcpy(output,(void *)(ssi->buffer)+(ssi->lastOffsetRead),bytesInEnd);
+    memcpy(output,(void *)((ssi->buffer)+(ssi->lastOffsetRead)),bytesInEnd);
     bytesAtBeginning = bytesToCopy - bytesInEnd;
-    memcpy(output+bytesInEnd,(void *)ssi->buffer,bytesAtBeginning);
+    memcpy((void *)((char *)output+bytesInEnd),(void *)ssi->buffer,bytesAtBeginning);
   } else {
     // otherwise just copy it all at once:
-    memcpy(output,(void *)(ssi->buffer)+(ssi->lastOffsetRead),bytesToCopy);
+    memcpy(output,(void *)((ssi->buffer)+(ssi->lastOffsetRead)),bytesToCopy);
   }
   // fill the rest with zeros, if any:
   if (lastFrameToCopy < lastFrameRequested) {
-    memset(output+bytesToCopy,0,FRAMES_TO_BYTES(lastFrameRequested - lastFrameToCopy));
+    memset((void *)((char *)output+bytesToCopy),0,FRAMES_TO_BYTES(lastFrameRequested - lastFrameToCopy));
     ssi->faultCount += 1;
   }
   // update record. Advance to the desired point, even
