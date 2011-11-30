@@ -38,11 +38,8 @@
  [copying-info-free cpointer?]
  ;; make a streamplay record for playing a stream.
  [make-streaming-info (c-> integer? cpointer?)]
- ;; if a streaming sound needs a buffer, returns the necessary
- #;[buffer-if-waiting (c-> cpointer? (or/c false? (list/c cpointer?
-                                                        integer?
-                                                        integer?
-                                                        procedure?)))]
+ ;; call the given procedure with the buffers to be filled:
+ [call-buffer-filler (c-> cpointer? procedure? any)]
  ;; the raw pointer to the streaming callback, for use with a
  ;; streamplay record:
  [streaming-callback cpointer?]
@@ -62,7 +59,9 @@
 ;; all of these functions assume 2-channel-interleaved 16-bit input:
 (define channels 2)
 (define s16max 32767)
-(define s16-bytes 2)
+(define sample-bytes (ctype-sizeof _sint16))
+
+(define (frames->bytes f) (* channels sample-bytes f))
 
 ;; COPYING CALLBACK STRUCT
 (define-cstruct _copying-rec
@@ -78,11 +77,10 @@
                          (/ (s16vector-length s16vec) channels)))
   (define frames-to-copy (- stop-frame start-frame))
   ;; do this allocation first: it's much bigger, and more likely to fail:
-  (define copied-sound (dll-malloc (* (ctype-sizeof _sint16) (* channels frames-to-copy))))
+  (define copied-sound (dll-malloc (frames->bytes frames-to-copy)))
   (define src-ptr (ptr-add (s16vector->cpointer s16vec)
-                           (* channels start-frame)
-                           _sint16))
-  (memcpy copied-sound src-ptr (* channels frames-to-copy) _sint16)
+                           (frames->bytes start-frame)))
+  (memcpy copied-sound src-ptr (frames->bytes frames-to-copy))
   (define copying-info (cast (dll-malloc (ctype-sizeof _copying-rec))
                              _pointer
                              _copying-rec-pointer))
@@ -128,9 +126,7 @@
                      _pointer
                      _stream-rec-pointer))
   (set-stream-rec-buffer-frames! info buffer-frames)
-  (set-stream-rec-buffer! info (dll-malloc (* (ctype-sizeof _sint16)
-                                              channels
-                                              buffer-frames)))
+  (set-stream-rec-buffer! info (dll-malloc (frames->bytes buffer-frames)))
   (set-stream-rec-last-frame-read! info 0)
   (set-stream-rec-last-offset-read! info 0)
   (set-stream-rec-last-frame-written! info 0)
@@ -141,6 +137,31 @@
   (set-stream-rec-all-done! info all-done-cell)
   info)
 
+;; given a stream-rec and a buffer-filler, call the 
+;; buffer filler twice: once to fill to the end of the buffer, and once 
+;; to fill the beginning of the buffer up to the last-read point.
+;; I'm ignoring the race conditions here; I believe the worst-case
+;; is audible glitches, and we'll see how common they are.
+(define (call-buffer-filler stream-info filler)
+  (define buffer-bytes (frames->bytes (stream-rec-buffer-frames stream-info)))
+  ;; the potential race condition here has no bad effects, I believe:
+  (define last-frame-read (stream-rec-last-frame-read stream-info))
+  (define last-offset-read (stream-rec-last-offset-read stream-info))
+  ;; first, fill out to the end of the buffer:
+  (define frames-remaining (bytes->frames (- buffer-bytes last-offset-read)))
+  (filler (ptr-add (stream-rec-buffer stream-rec) 
+                   last-offset-read)
+          frames-remaining
+          last-frame-read)
+  ;; then, fill the front part of the buffer
+  (filler (stream-rec-buffer stream-rec)
+          (bytes->frames last-offset-read)
+          (+ last-frame-read frames-remaining))
+  ;; update the stream-rec
+  (set-stream-rec-last-frame-written! stream-info
+   (+ last-frame-read (stream-rec-buffer-frames stream-info)))
+  (set-stream-rec-last-offset-written! stream-info 
+                                       last-offset-read))
 
 ;; if a buffer needs to be filled, return the info needed to fill it
 #;(define (buffer-if-waiting stream-info)

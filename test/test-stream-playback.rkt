@@ -49,7 +49,7 @@
       (ptr-set! ptr _sint16 sample-idx sample)
       (ptr-set! ptr _sint16 (add1 sample-idx) sample)))
   
-  #;(define (call-fill-buf streaming-info-ptr)
+  (define (call-fill-buf streaming-info-ptr)
     (match (buffer-if-waiting streaming-info-ptr)
       [#f ;; oops, probably stacked up signals. go wait again.
        #f]
@@ -146,13 +146,10 @@
     (printf "faults: ~s\n" (stream-fails stream-info)))
   
   ;; try playing a tone at 403 Hz:
-  #;(let ()
+  (let ()
     (define buffer-frames 1024)
-    (match-define (list stream-info signal-channel)
-      (make-streaming-info buffer-frames))
-    (define stream (open-test-stream streaming-callback
-                                     stream-info
-                                     buffer-frames))
+    (match-define stream-info (make-streaming-info buffer-frames))
+    (define stream (open-test-stream streaming-callback stream-info))
     (pa-set-stream-finished-callback stream streaming-info-free)
     (printf "tone at 403 Hz\n")
     (define filling-thread
