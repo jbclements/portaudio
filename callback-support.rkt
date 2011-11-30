@@ -37,7 +37,9 @@
  ;; the free function for a copying callback
  [copying-info-free cpointer?]
  ;; make a streamplay record for playing a stream.
- [make-streaming-info (c-> integer? cpointer?)]
+ [make-streaming-info (c-> integer? (list/c cpointer? cpointer?))]
+ ;; is the stream all done?
+ [all-done? (c-> cpointer? boolean?)]
  ;; call the given procedure with the buffers to be filled:
  [call-buffer-filler (c-> cpointer? procedure? any)]
  ;; the raw pointer to the streaming callback, for use with a
@@ -51,6 +53,7 @@
 
 ;; providing these for test cases only:
 (provide stream-rec-buffer
+         stream-rec-buffer-frames
          stream-rec-last-frame-read
          set-stream-rec-last-frame-written!
          set-stream-rec-last-offset-written!
@@ -62,6 +65,8 @@
 (define sample-bytes (ctype-sizeof _sint16))
 
 (define (frames->bytes f) (* channels sample-bytes f))
+;; this should never be a non-integer. Typed racket would help here.
+(define (bytes->frames b) (/ b (* channels sample-bytes)))
 
 ;; COPYING CALLBACK STRUCT
 (define-cstruct _copying-rec
@@ -135,7 +140,13 @@
   (define all-done-cell (malloc 'raw 4))
   (ptr-set! all-done-cell _uint32 0)
   (set-stream-rec-all-done! info all-done-cell)
-  info)
+  (list info all-done-cell))
+
+;; given an all-done? cell, check whether it's nonzero.
+;; don't call this with the stream-rec pointer, it will
+;; immediately signal true.
+(define (all-done? all-done-ptr)
+  (not (= (ptr-ref all-done-ptr _uint32) 0)))
 
 ;; given a stream-rec and a buffer-filler, call the 
 ;; buffer filler twice: once to fill to the end of the buffer, and once 
@@ -143,25 +154,44 @@
 ;; I'm ignoring the race conditions here; I believe the worst-case
 ;; is audible glitches, and we'll see how common they are.
 (define (call-buffer-filler stream-info filler)
-  (define buffer-bytes (frames->bytes (stream-rec-buffer-frames stream-info)))
-  ;; the potential race condition here has no bad effects, I believe:
+  (define buffer (stream-rec-buffer stream-info))
+  (define buffer-frames (stream-rec-buffer-frames stream-info))
+  (define buffer-bytes (frames->bytes buffer-frames))
+
+  ;; the potential race condition here has no "major" bad effects, I believe:
   (define last-frame-read (stream-rec-last-frame-read stream-info))
   (define last-offset-read (stream-rec-last-offset-read stream-info))
-  ;; first, fill out to the end of the buffer:
-  (define frames-remaining (bytes->frames (- buffer-bytes last-offset-read)))
-  (filler (ptr-add (stream-rec-buffer stream-rec) 
-                   last-offset-read)
-          frames-remaining
-          last-frame-read)
-  ;; then, fill the front part of the buffer
-  (filler (stream-rec-buffer stream-rec)
-          (bytes->frames last-offset-read)
-          (+ last-frame-read frames-remaining))
-  ;; update the stream-rec
-  (set-stream-rec-last-frame-written! stream-info
-   (+ last-frame-read (stream-rec-buffer-frames stream-info)))
-  (set-stream-rec-last-offset-written! stream-info 
-                                       last-offset-read))
+  ;; safe to write ahead up to wraparound of last point read:
+  (define last-frame-to-write (+ last-frame-read buffer-frames))
+  (define last-offset-to-write last-offset-read)
+  
+  ;; start at last-written or last-read, whichever is later.
+  (define last-frame-written (stream-rec-last-frame-written stream-info))
+  (define last-offset-written (stream-rec-last-offset-written stream-info))
+  (define underflow? (< last-frame-written last-frame-read))
+  (define first-frame-to-write (cond [underflow? last-frame-read]
+                                     [else       last-frame-written]))
+  (define first-offset-to-write (cond [underflow? last-offset-read]
+                                      [else       last-offset-written]))
+
+  (unless (= first-frame-to-write last-frame-to-write)
+    ;; do we have to wrap around?
+    (cond [(<= last-offset-to-write first-offset-to-write)
+           (define frames-to-end 
+             (bytes->frames (- buffer-bytes first-offset-to-write)))
+           (filler (ptr-add buffer first-offset-to-write)
+                   frames-to-end
+                   first-frame-to-write)
+           (filler buffer
+                   (bytes->frames last-offset-to-write)
+                   (+ first-frame-to-write frames-to-end))]
+          [else
+           (filler (ptr-add buffer first-offset-to-write)
+                   (- last-frame-to-write first-frame-to-write)
+                   first-frame-to-write)])
+    ;; update the stream-rec
+    (set-stream-rec-last-frame-written! stream-info last-frame-to-write)
+    (set-stream-rec-last-offset-written! stream-info last-offset-to-write)))
 
 ;; if a buffer needs to be filled, return the info needed to fill it
 #;(define (buffer-if-waiting stream-info)

@@ -14,11 +14,10 @@
 (define time-checker #f)
 
 ;; sine wave at 403 Hz
-(define (buffer-filler sample-setter len idx)
+(define (buffer-filler sample-setter len base-frames)
   (define pre-time (and time-checker (time-checker)))
-  (define base-frames (* idx 1024))
   (define base-t (exact->inexact (* base-frames srinv)))
-  (for ([i (in-range 1024)])
+  (for ([i (in-range len)])
     (define t (+ base-t (* i srinv)))
     (define sample
       (inexact->exact (round (* 32767 (* 0.2 (sin (* twopi t 403)))))))
@@ -34,7 +33,7 @@
 (collect-garbage)
 (collect-garbage)
 (match-define (list checker stopper)
-  (stream-play buffer-filler 1024 44100))
+  (stream-play buffer-filler 0.05 44100))
 (set! time-checker checker)
 
 
@@ -46,11 +45,10 @@
 #;(mean-and-variance (filter (lambda (x) x) log1))
 
 
-(define (buffer-filler/unsafe ptr len idx)
+(define (buffer-filler/unsafe ptr len base-frames)
   (define pre-time (and time-checker (time-checker)))
-  (define base-frames (* idx 1024))
   (define base-t (exact->inexact (* base-frames srinv)))
-  (for ([i (in-range 1024)])
+  (for ([i (in-range len)])
     (define t (+ base-t (* i srinv)))
     (define sample
       (inexact->exact (round (* 32767 (* 0.2 (sin (* twopi t 403)))))))
@@ -63,7 +61,7 @@
       (set! log2 (cons #f log2))))
 
 (match-define (list checker2 stopper2)
-  (stream-play/unsafe buffer-filler/unsafe 1024 44100))
+  (stream-play/unsafe buffer-filler/unsafe 0.025 44100))
 (set! time-checker checker2)
 (sleep 0.5)
 (stopper2)

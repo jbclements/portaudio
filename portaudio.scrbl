@@ -9,7 +9,7 @@
 
 @(require (for-label racket))
 
-@defmodule[(planet clements/portaudio)]{This collection provides 
+@defmodule/this-package[main]{This collection provides 
  bindings to the cross-platform ``Portaudio'' library, capable of playing 
  sound on Windows, OS X, and Linux. 
  
@@ -92,15 +92,14 @@ to call this for sounds that are really big (> 100MB?).
 @section{Playing Streams}
 
 @defproc[(stream-play [buffer-filler (-> buffer-setter? nat? nat? void?)] 
-                      [buffer-frames nat?] 
+                      [buffer-time nonnegative-real?] 
                       [sample-rate nonnegative-real?])
          (list/c (-> real?) (-> void?))]{
- Given a buffer-filling callback and a buffer size (in frames) and a sample
+ Given a buffer-filling callback and a buffer time (in seconds) and a sample
  rate, starts playing a stream that uses the given callback to supply data.
  The buffer-filler receives three arguments: a procedure that can be used
- to mutate the buffer, the length of the buffer in frames, and the index of
- this buffer. So, the first call to the buffer filler will get the index 0,
- the second call will get the index 1, and so forth.
+ to mutate the buffer, the length of the buffer in frames, and the frame-number
+ to start at.
  
  The function returns a list contaning two functions: one that queries the
  stream for a time in seconds, and the other that stops the stream.
@@ -117,13 +116,12 @@ to call this for sounds that are really big (> 100MB?).
 
 (require (planet clements/portaudio))
 
-(define (buffer-filler setter frames idx)
-  (define base-t (* frames idx))
+(define (buffer-filler setter frames base-frames)
+  (define pitch 426)
   (for ([i (in-range frames)]
-        [t (in-range base-t (+ base-t frames))])
-    (define pitch 426)
+        [f (in-range base-frames (+ base-frames frames))])
     (define sample 
-      (real->s16 (* 0.2 (sin (* tpisr t pitch)))))
+      (real->s16 (* 0.2 (sin (* tpisr f pitch)))))
     (setter (* i 2) sample)
     (setter (+ 1 (* i 2)) sample)))
 
@@ -134,23 +132,24 @@ to call this for sounds that are really big (> 100MB?).
 
 
 (match-define (list timer stopper)
-              (stream-play buffer-filler 8192 44100.0))
+              (stream-play buffer-filler 0.1 44100.0))
 }|
 
-Note that this example uses a large buffer size of 8K, so that most GC pauses won't 
-interrupt it (8192 / 44100.0 = 186 ms, a pretty long GC).
+Note that this example uses a long buffer of 0.1 seconds (= 100 milliseconds) 
+so that most GC pauses won't 
+interrupt it. 
 
-However, this will mean a latency of 2x186ms = 374ms, which would be pretty
-terrible for an interactive system. I usually use 1024 frames, and just
+However, this a latency of 100ms is be pretty
+terrible for an interactive system. I usually use 50ms, and just
 put up with the occasional miss in return for lower latency.
 
  }
 
 @defproc[(stream-play/unsafe [buffer-filler (-> cpointer? int? int? void?)]
-                      [buffer-frames nat?] 
+                      [buffer-time nonnegative-real?] 
                       [sample-rate nonnegative-real?])
          (list/c (-> real?) (-> void?))]{
- Given a callback and a buffer size (in frames) and a sample rate,
+ Given a callback and a buffer time (in seconds) and a sample rate,
  starts playing a stream using the given callback to supply data.
  
  The difference is that this function's callback is called with a cpointer,
