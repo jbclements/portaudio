@@ -21,13 +21,6 @@
 ;; the tricky thing is managing the resources that are shared
 ;; between C and Racket.
 
-;; currently, there are two bits that racket doesn't manage,
-;; the streaming record and the mzrt_sema. These are both 
-;; freed by the finished-callback that's attached to the 
-;; stream.  This means that the place that's blocked on 
-;; that semaphore had better be destroyed *before* the stream
-;; is closed.
-
 (define (frames? n)
   (and (exact-integer? n)
        (<= 0 n)))
@@ -44,10 +37,9 @@
  ;; the free function for a copying callback
  [copying-info-free cpointer?]
  ;; make a streamplay record for playing a stream.
- [make-streaming-info (c-> integer? (list/c cpointer? place?))]
+ [make-streaming-info (c-> integer? cpointer?)]
  ;; if a streaming sound needs a buffer, returns the necessary
- ;; info
- [buffer-if-waiting (c-> cpointer? (or/c false? (list/c cpointer?
+ #;[buffer-if-waiting (c-> cpointer? (or/c false? (list/c cpointer?
                                                         integer?
                                                         integer?
                                                         procedure?)))]
@@ -59,6 +51,13 @@
  [stream-fails (c-> cpointer? integer?)]
  ;; the free function for a streaming callback
  [streaming-info-free cpointer?])
+
+;; providing these for test cases only:
+(provide stream-rec-buffer
+         stream-rec-last-frame-read
+         set-stream-rec-last-frame-written!
+         set-stream-rec-last-offset-written!
+         )
 
 ;; all of these functions assume 2-channel-interleaved 16-bit input:
 (define channels 2)
@@ -92,57 +91,27 @@
   (set-copying-rec-num-samples! copying-info (* frames-to-copy channels))
   copying-info)
 
-;; REMOVE THIS HACK ONCE _ARRAY IS PART OF THE MAINSTREAM:
-(define-cstruct _array-hack
-  ([a _pointer]
-   [b _pointer]
-   [c _pointer]
-   [d _pointer]))
-(define-cstruct _array-hack-2
-  ([a _int]
-   [b _int]
-   [c _int]
-   [d _int]))
-(define (hack-array-ref array idx)
-  (define array-reffer
-    (case idx
-      [(0) array-hack-a]
-      [(1) array-hack-b]
-      [(2) array-hack-c]
-      [(3) array-hack-d]))
-  (array-reffer array))
-(define (hack-array-ref-2 array idx)
-  (define array-reffer
-    (case idx
-      [(0) array-hack-2-a]
-      [(1) array-hack-2-b]
-      [(2) array-hack-2-c]
-      [(3) array-hack-2-d]))
-  (array-reffer array))
-
 ;; STREAMING CALLBACK STRUCT
 
-;; DON'T CHANGE STREAMBUFS WHILE ARRAY-HACK IS IN PLACE
-(define streambufs 4)
 (define-cstruct _stream-rec
-  ([buffer-frames _int]
-   ;; the buffers used by the filling process:
-   [buffers _array-hack #;(_array _pointer streambufs)]
-   ;; the index of the buffer last placed
-   ;; in this slot by the filling process:
-   [buf-numbers _array-hack-2 #;(_array _int streambufs)]
-   ;; the index of the buffer last copied
-   ;; out by the callback:
-   [last-used _int]
+  (;; the number of frames in the circular buffer
+   [buffer-frames _int]
+   ;; the circular buffer
+   [buffer _pointer]
+   ;; the last frame read by the callback
+   [last-frame-read _uint]
+   ;; the offset of the last byte read by the callback.
+   [last-offset-read _uint]
+   ;; the last frame written by Racket
+   [last-frame-written _uint]
+   ;; the offset of the last byte written by Racket.
+   [last-offset-written _uint]
    ;; number of faults:
    [fault-count _int]
-   ;; a pointer to an immobile cell containing 
-   ;; an mzrt-sema, used to signal when data is
-   ;; needed
-   [buffer-needed-sema _pointer]
    ;; a pointer to a 4-byte cell; when it's nonzero,
-   ;; the receiving "place" should shut down, freeing
-   ;; the mzrt-sema and this cell.
+   ;; the supplying procedure should shut down, and
+   ;; free this cell. If it doesn't get freed, well,
+   ;; that's four bytes wasted forever.
    [all-done _pointer]))
 
 
@@ -153,54 +122,28 @@
 ;; create a fresh streaming-sound-info structure, including
 ;; four buffers to be used in rendering the sound.
 (define (make-streaming-info buffer-frames)
-  ;; will never get freed.... but a few bytes lost should be okay....
-  (define mzrt-sema (mzrt-sema-create 0))
+  ;; we must use the malloc defined in the dll here, to
+  ;; avoid hideous windows unpleasantness.
   (define info (cast (dll-malloc (ctype-sizeof _stream-rec))
                      _pointer
                      _stream-rec-pointer))
   (set-stream-rec-buffer-frames! info buffer-frames)
-  (define buffers (stream-rec-buffers info))
-  (define buffer-nums (stream-rec-buf-numbers info))
-  ;; CAN'T USE THIS IN 5.1.3, MUST USE HACK INSTEAD:
-  #;(for ([i (in-range streambufs)])
-    (array-set! buffers
-                i
-                (dll-malloc (* (ctype-sizeof _sint16) (* buffer-frames channels))))
-    (array-set! buffer-nums i -1))
-  ;; HERE'S THE HACK:
-  (set-array-hack-a! 
-   buffers
-   (dll-malloc 
-    (* (ctype-sizeof _sint16) buffer-frames channels)))
-  (set-array-hack-b!
-   buffers
-   (dll-malloc
-    (* (ctype-sizeof _sint16) buffer-frames channels)))
-  (set-array-hack-c!
-   buffers
-   (dll-malloc
-    (* (ctype-sizeof _sint16) buffer-frames channels)))
-  (set-array-hack-d!
-   buffers
-   (dll-malloc
-    (* (ctype-sizeof _sint16) buffer-frames channels)))
-  (set-array-hack-2-a! buffer-nums -1)
-  (set-array-hack-2-b! buffer-nums -1)
-  (set-array-hack-2-c! buffer-nums -1)
-  (set-array-hack-2-d! buffer-nums -1)
-  ;; END OF HACK.
-  (set-stream-rec-last-used! info -1)
+  (set-stream-rec-buffer! info (dll-malloc (* (ctype-sizeof _sint16)
+                                              channels
+                                              buffer-frames)))
+  (set-stream-rec-last-frame-read! info 0)
+  (set-stream-rec-last-offset-read! info 0)
+  (set-stream-rec-last-frame-written! info 0)
+  (set-stream-rec-last-offset-written! info 0)
   (set-stream-rec-fault-count! info 0)
-  (set-stream-rec-buffer-needed-sema! info mzrt-sema)
   (define all-done-cell (malloc 'raw 4))
   (ptr-set! all-done-cell _uint32 0)
   (set-stream-rec-all-done! info all-done-cell)
-  (define listening-place (mzrt-sema-listener mzrt-sema all-done-cell))
-  (list info listening-place))
+  info)
 
 
 ;; if a buffer needs to be filled, return the info needed to fill it
-(define (buffer-if-waiting stream-info)
+#;(define (buffer-if-waiting stream-info)
   (define next-to-be-used (add1 (stream-rec-last-used stream-info)))
   (define buf-numbers (stream-rec-buf-numbers stream-info))
   (define buffer-index (modulo next-to-be-used streambufs))

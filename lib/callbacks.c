@@ -25,17 +25,18 @@ typedef struct soundCopyingInfo{
   unsigned long numSamples;
 } soundCopyingInfo;
 
-#define STREAMBUFS 4
-
 typedef struct soundStreamInfo{
   int   bufferFrames;
-  short *buffers[STREAMBUFS];
-  // mutated by racket only:
-  int   bufNumbers[STREAMBUFS];
-  // mutated by callback only:
-  int   lastUsed;
+  char *buffer;
+
+  unsigned int lastFrameRead;
+  unsigned int lastOffsetRead;
+
+  // only mutated by Racket
+  unsigned int lastFrameWritten;
+  unsigned int lastOffsetWritten;
+
   int   faultCount;
-  struct mzrt_sema *bufferNeeded;
   int   *all_done;
 } soundStreamInfo;
 
@@ -43,6 +44,8 @@ typedef struct soundStreamInfo{
 #define SAMPLEBYTES 2
 
 #define MYMIN(a,b) ((a)<(b) ? (a) : (b))
+#define MYMAX(a,b) ((a)>(b) ? (a) : (b))
+#define FRAMES_TO_BYTES(a) ((a)*CHANNELS*SAMPLEBYTES)
 
 
 void freeCopyingInfo(soundCopyingInfo *ri);
@@ -73,7 +76,7 @@ int copyingCallback(
     memcpy(output,(void *)copyBegin,bytesToCopy);
     // zero out the rest of the buffer:
     zeroRegionBegin = (char *)output + bytesToCopy;
-    bytesToZero = (frameCount * CHANNELS * SAMPLEBYTES) - bytesToCopy;
+    bytesToZero = FRAMES_TO_BYTES(frameCount) - bytesToCopy;
     memset(zeroRegionBegin,0,bytesToZero);
     ri->curSample = ri->numSamples;
 
@@ -97,30 +100,39 @@ int streamingCallback(
     void *userData ) {
 
   soundStreamInfo *ssi = (soundStreamInfo *)userData;
-  int bufferBytes = frameCount * CHANNELS * SAMPLEBYTES;
-  int nextBufNum = ssi->lastUsed + 1;
-  int modCounter = nextBufNum % STREAMBUFS;
 
-  // right number of frames requested?
-  if (ssi->bufferFrames != frameCount) {
-    fprintf(stderr,"audio unit requested %ld frames, instead of expected %d.\n",
-            frameCount,
-            ssi->bufferFrames);
+  if (frameCount > (ssi->bufferFrames / 2)) {
+    fprintf(stderr,"system requested %ld bytes, too many for buffer of length %d\n",
+            frameCount, ssi->bufferFrames);
     return(paAbort);
   }
-  
-  // has the desired buffer been written?
-  if (ssi->bufNumbers[modCounter] == nextBufNum) {
-    // yes, do the copy:
-    memcpy(output,(void *)ssi->buffers[modCounter],bufferBytes);
+
+  unsigned int lastFrameRequested = ssi->lastFrameRead + frameCount;
+  unsigned int lastFrameToCopy = MYMAX(ssi->lastFrameRead,MYMIN(lastFrameRequested,ssi->lastFrameWritten));
+  unsigned int framesToCopy = lastFrameToCopy - ssi->lastFrameRead;
+  unsigned int bytesToCopy = FRAMES_TO_BYTES(framesToCopy);
+  unsigned int lastOffsetToCopy = ssi->lastOffsetRead + bytesToCopy;
+  unsigned int bufferBytes = FRAMES_TO_BYTES(ssi->bufferFrames);
+  if (lastOffsetToCopy > bufferBytes) {
+    // break it into two pieces:
+    unsigned int bytesInEnd = bufferBytes - ssi->lastOffsetRead;
+    memcpy(output,(void *)(ssi->buffer)+(ssi->lastOffsetRead),bytesInEnd);
+    unsigned int bytesAtBeginning = bytesToCopy - bytesInEnd;
+    memcpy(output+bytesInEnd,(void *)ssi->buffer,bytesAtBeginning);
   } else {
-    // no, just use silence:
-    memset(output,0,bufferBytes);
-    // increment the fault count:
+    // otherwise just copy it all at once:
+    memcpy(output,(void *)(ssi->buffer)+(ssi->lastOffsetRead),bytesToCopy);
+  }
+  // fill the rest with zeros, if any:
+  if (lastFrameToCopy < lastFrameRequested) {
+    memset(output+bytesToCopy,0,FRAMES_TO_BYTES(lastFrameRequested - lastFrameToCopy));
     ssi->faultCount += 1;
   }
-  ssi->lastUsed = nextBufNum;
-  mzrt_sema_post(ssi->bufferNeeded);
+  // update record. Advance to the desired point, even
+  // if it wasn't available.
+  ssi->lastFrameRead = lastFrameRequested;
+  ssi->lastOffsetRead = (ssi->lastOffsetRead + FRAMES_TO_BYTES(frameCount)) % bufferBytes;
+  
   return(paContinue);
 
 }
@@ -134,14 +146,10 @@ void freeCopyingInfo(soundCopyingInfo *ri){
 
 // clean up a streamingInfo record when done.
 void freeStreamingInfo(soundStreamInfo *ssi){
-  int i;
 
-  for (i = 0; i < STREAMBUFS; i++) {
-    free(ssi->buffers[i]);
-  }
+  free(ssi->buffer);
   // when all_done is 1, this triggers self-destruct:
   *(ssi->all_done) = 1;
-  mzrt_sema_post(ssi->bufferNeeded);
   free(ssi);
 }
 

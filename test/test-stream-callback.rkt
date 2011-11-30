@@ -22,14 +22,26 @@
   (define callback-lib
     (ffi-lib (build-path libs (system-library-subpath) "callbacks")))
   
-  (define streambufs 4)
   (define-cstruct _stream-rec
-    ([buffer-frames _int]
-     [buffers (_array _pointer streambufs)]
-     [buf-numbers (_array _int streambufs)]
-     [last-used _int]
-     [fault-count _int]
-     [mzrt-sema _pointer]))
+  (;; the number of frames in the circular buffer
+   [buffer-frames _int]
+   ;; the circular buffer
+   [buffer _pointer]
+   ;; the last frame read by the callback
+   [last-frame-read _uint]
+   ;; the offset of the last byte read by the callback.
+   [last-offset-read _uint]
+   ;; the last frame written by Racket
+   [last-frame-written _uint]
+   ;; the offset of the last byte written by Racket.
+   [last-offset-written _uint]
+   ;; number of faults:
+   [fault-count _int]
+   ;; a pointer to a 4-byte cell; when it's nonzero,
+   ;; the supplying procedure should shut down, and
+   ;; free this cell. If it doesn't get freed, well,
+   ;; that's four bytes wasted forever.
+   [all-done _pointer]))
   
   (define streaming-callback
     (get-ffi-obj "streamingCallback"
@@ -43,68 +55,95 @@
                   _stream-rec-pointer
                   -> _int)))
   
+  ;; changing these will mess up the "around-the-corner"-ness
+  ;; of the tests.
+  (define buffer-frames 2048)
+  (define output-buffer-frames 224)
   
-  (match-define
-    (list stream-info place-channel) 
-    (make-streaming-info 1024))
+  (define stream-info (make-streaming-info buffer-frames))
   
   (check-equal? (stream-rec-buffer-frames stream-info)
-                1024)
-  (check-equal? (stream-rec-last-used stream-info) -1)
-  (check-equal? (for/list ([i (in-range streambufs)])
-                  (array-ref (stream-rec-buf-numbers
-                              stream-info)
-                             i))
-                '(-1 -1 -1 -1))
+                buffer-frames)
+  (ptr-set! (stream-rec-buffer stream-info) _sint16 39 -47)
+  (check-equal? (ptr-ref (stream-rec-buffer stream-info) _sint16 39) -47)
+  (check-equal? (stream-rec-last-frame-read stream-info) 0)
+  (check-equal? (stream-rec-last-offset-read stream-info) 0)
+  (check-equal? (stream-rec-last-frame-written stream-info) 0)
+  (check-equal? (stream-rec-last-offset-written stream-info) 0)
   (check-equal? (stream-rec-fault-count stream-info) 0)
   
-  ;; randomize all the buffers
-  (for ([i (in-range streambufs)])
-    (define buf (array-ref (stream-rec-buffers stream-info) i))
-    (for ([j (in-range (* channels 1024))])
-      (ptr-set! buf _sint16 j (random 100))))
-  (define tgt (make-s16vector (* channels 1024) 1))
+  ;; randomize the buffers
+  (for ([j (in-range (* channels buffer-frames))])
+    (ptr-set! (stream-rec-buffer stream-info) _sint16 j (- (random 1000) 500)))
+  (define tgt (make-s16vector (* channels output-buffer-frames) 1))
   
-  ;; wrong number of frames:
-  (check-equal? (streaming-callback
-                 (s16vector->cpointer tgt)
-                 14
-                 stream-info)
-                pa-abort)
-  ;; it's now been freed....
-  (set! stream-info #f)
-  
-  (match-define (list stream-info-2 place-channel-2)
-    (make-streaming-info 1024))
+  (define buffer-bytes (* 2 channels buffer-frames))
   
   ;; buffer-not ready yet:
-  (set-stream-rec-last-used! stream-info-2 1025)
+  (set-stream-rec-last-frame-read! stream-info 7000)
+  (set-stream-rec-last-offset-read! stream-info (modulo (* 4 7000) buffer-bytes))
   (check-equal? (streaming-callback
                  (s16vector->cpointer tgt)
-                 1024
-                 stream-info-2)
+                 output-buffer-frames
+                 stream-info)
                 pa-continue)
-  (check-equal? (stream-rec-last-used stream-info-2) 1026)
-  (check-equal? (stream-rec-fault-count stream-info-2) 1)
-  (for ([i (in-range (* channels 1024))])
+  (check-equal? (stream-rec-last-frame-read stream-info) 7224)
+  (check-equal? (stream-rec-last-offset-read stream-info) (modulo (* 4 7224) buffer-bytes))
+  (check-equal? (stream-rec-fault-count stream-info) 1)
+  (for ([i (in-range (* channels output-buffer-frames))])
     (check-equal? (s16vector-ref tgt i) 0))
+  (fprintf (current-error-port) "finished with first test.\n")
   
   ;; buffer ready:
-  (set-stream-rec-last-used! stream-info-2 1025)
-  (array-set! (stream-rec-buf-numbers stream-info-2) 2 1026)
+  (set-stream-rec-last-frame-written! stream-info 8000)
+  (set-stream-rec-last-offset-written! stream-info (modulo (* 4 8000) buffer-bytes))
   (check-equal? (streaming-callback
                  (s16vector->cpointer tgt)
-                 1024
-                 stream-info-2)
+                 output-buffer-frames
+                 stream-info)
                 pa-continue)
-  (check-equal? (stream-rec-last-used stream-info-2) 1026)
-  (let ()
-    (define buf (array-ref (stream-rec-buffers stream-info-2) 2))
-    (for ([i (in-range (* channels 1024))])
-      (check-equal? (s16vector-ref tgt i)
-                    (ptr-ref buf _sint16 i))))
+  (check-equal? (stream-rec-last-frame-read stream-info) 7448)
+  (check-equal? (stream-rec-last-offset-read stream-info) (modulo (* 4 7448) buffer-bytes))
+  (for ([i (in-range (* 2 output-buffer-frames))]
+        [j (in-range (modulo (* 2 7224)
+                             (* 2 2048))
+                     (+ (modulo (* 2 7224)
+                                (* 2 2048))
+                        (* 2 output-buffer-frames)))])
+    (check-equal? (s16vector-ref tgt i)
+                  (ptr-ref (stream-rec-buffer stream-info) _sint16 j)))
   
-
+  ;; try an "around-the-corner" with a data failure too
+  
+  (set-stream-rec-last-frame-written! stream-info 8200)
+  (set-stream-rec-last-offset-written! stream-info (modulo (* 4 8200) buffer-bytes))
+  (set-stream-rec-last-frame-read! stream-info 8000)
+  (set-stream-rec-last-offset-read! stream-info (modulo (* 4 8000) buffer-bytes))
+  (check-equal? (streaming-callback
+                 (s16vector->cpointer tgt)
+                 output-buffer-frames
+                 stream-info)
+                pa-continue)
+  (check-equal? (stream-rec-last-frame-read stream-info) 8224)
+  (check-equal? (stream-rec-last-offset-read stream-info) (modulo (* 4 8224) buffer-bytes))
+  ;; end of buffer:
+  (for ([i (in-range (* 2 192))]
+        [j (in-range (modulo (* 2 8000)
+                             (* 2 buffer-frames))
+                     (+ (* 2 192)
+                        (modulo (* 2 8000)
+                                (* 2 buffer-frames))))])
+    (check-equal? 
+     (s16vector-ref tgt i)
+     (ptr-ref (stream-rec-buffer stream-info) _sint16 j)))
+  ;; around the corner:
+  (for ([i (in-range (* 2 192) (* 2 200))]
+        [j (in-range (* 2 8))])
+    (check-equal? 
+     (s16vector-ref tgt i)
+     (ptr-ref (stream-rec-buffer stream-info) _sint16 j)))
+  (for ([i (in-range (* 2 200) (* 2 224))])
+    (check-equal? (s16vector-ref tgt i) 0))
   )))
 
 

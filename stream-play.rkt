@@ -40,7 +40,7 @@
      2             ;; output channels
      'paInt16      ;; sample format
      sr/i          ;; sample rate
-     buffer-frames ;;frames-per-buffer  ;; frames per buffer
+     0             ;;frames-per-buffer -- let the system decide
      streaming-callback ;; callback (NULL means just wait for data)
      stream-info))
   (pa-set-stream-finished-callback stream

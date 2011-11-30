@@ -54,7 +54,3 @@
     (raise-type-error 's16vec-play "end frame < total number of frames" 2 vec start-frame stop-frame))
   (when (< stop-frame start-frame)
     (raise-type-error 's16vec-play "start frame <= end frame" 1 vec start-frame stop-frame)))
-
-;; at 44100, this is close to 100ms, which should cover most
-;; GC pauses.
-(define default-buffer-frames 4096)
