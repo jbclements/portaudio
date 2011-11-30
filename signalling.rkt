@@ -15,11 +15,6 @@
 ;; place that waits on that semaphore and 
 ;; sends a message on its place-channel
 ;; whenever there's a post to the semaphore.
-;; returns a list containing the place-descriptor 
-;; and the kill-box.
-;; if the "kill" box is set to #t, then 
-;; posting to the mzrt-sema will cause
-;; the listener to die.
 (define (mzrt-sema-listener mzrt-sema all-done-cell)
   (define pre (current-inexact-milliseconds))
   (define p 

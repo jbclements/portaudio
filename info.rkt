@@ -11,8 +11,8 @@
 
 (define scribblings '(("portaudio.scrbl" () (tool))))
 (define categories '(media))
-(define version "2011-10-20-09:57")
-(define release-notes '((p "trying to get rid of stray error messages")))
+(define version "2011-11-29-10:48")
+(define release-notes '((p "overhaul of places & memory managment.")))
 
 ;; planet-specific:
 (define repositories '("4.x"))

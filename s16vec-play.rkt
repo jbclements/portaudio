@@ -19,6 +19,8 @@
 
 (define channels 2)
 
+;; given an s16vec, a starting frame, a stopping frame or 
+;; false, and a sample rate, play the sound.
 (define (s16vec-play s16vec start-frame pre-stop-frame sample-rate)
   (define total-frames (/ (s16vector-length s16vec) channels))
   (define stop-frame (or pre-stop-frame
