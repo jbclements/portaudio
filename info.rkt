@@ -6,13 +6,13 @@
                    "for audio output and input. It runs "
                    "on Windows, Mac OS X, and linux. "
                    "This package provides Racket bindings "
-                   "for these functions. This package is "
-                   "unsafe. Use RSound for safety.")))
+                   "for these functions. For higher-level "
+                   "tools and utilities, use the RSound package.")))
 
 (define scribblings '(("portaudio.scrbl" () (tool))))
 (define categories '(media))
-(define version "2011-11-29-10:48")
-(define release-notes '((p "overhaul of places & memory managment.")))
+(define version "2011-11-30-20:35")
+(define release-notes '((p "threw out synchronization. Awesome!")))
 
 ;; planet-specific:
 (define repositories '("4.x"))
