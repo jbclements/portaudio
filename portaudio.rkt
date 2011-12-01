@@ -807,6 +807,15 @@ const PaDeviceInfo* Pa_GetDeviceInfo( PaDeviceIndex device );
   (get-ffi-obj "Pa_GetDeviceInfo"
                libportaudio
                (_fun _pa-device-index -> _pa-device-info-pointer)))
+
+(define (enumerate-available-devices)
+  (for/list ([i (in-range (pa-get-device-count))])
+    (pa-device-info->list (pa-get-device-info i))))
+
+(define (default-device-info)
+  (pa-device-info->list (pa-get-device-info 
+                         (pa-get-default-output-device))))
+
 #|
 
 

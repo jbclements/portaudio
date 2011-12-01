@@ -4,9 +4,6 @@
          ffi/unsafe
          (rename-in racket/contract [-> c->])
          racket/runtime-path
-         racket/place
-         "mzrt-sema.rkt"
-         "signalling.rkt"
          "portaudio.rkt"
          (only-in racket/match match-define))
 
