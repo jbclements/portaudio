@@ -869,8 +869,6 @@ typedef struct PaStreamParameters
 |#
 
 
-;; *** UNTESTED ***:
-
 (define-cstruct _pa-stream-parameters
   ([device                        _pa-device-index]
    [channel-count                 _int]
@@ -1252,8 +1250,8 @@ PaError Pa_OpenStream( PaStream** stream,
   (get-ffi-obj "Pa_OpenStream"
                libportaudio
                (_fun (result : (_ptr o _pa-stream)) ;; stream
-                     _pa-stream-parameters-pointer ;; inputParameters
-                     _pa-stream-parameters-pointer ;; outputParameters
+                     _pa-stream-parameters-pointer/null ;; inputParameters
+                     _pa-stream-parameters-pointer/null ;; outputParameters
                      _double ;; sampleRate
                      _ulong ;; framesPerBuffer
                      _pa-stream-flags ;; streamFlags

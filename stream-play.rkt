@@ -38,14 +38,7 @@
     (make-streaming-info buffer-frames))
   (define sr/i (exact->inexact sample-rate))
   (define stream
-    (pa-open-default-stream
-     0             ;; input channels
-     2             ;; output channels
-     'paInt16      ;; sample format
-     sr/i          ;; sample rate
-     0             ;;frames-per-buffer -- let the system decide
-     streaming-callback ;; callback (NULL means just wait for data)
-     stream-info))
+    (stream-choose stream-info sample-rate))
   (pa-set-stream-finished-callback stream
                                    streaming-info-free)
   ;; pre-fill of first buffer:
@@ -99,3 +92,59 @@
            buffer-time))
   (inexact->exact 
    (ceiling (* buffer-time sample-rate))))
+
+
+;; stream-choose : stream-info number -> stream
+;; given a stream-info and a sample-rate, search for an 
+;; output device that can provide output channels with 
+;; a reasonable latency, and open that device.
+(define (stream-choose stream-info sample-rate)
+  (define sr/i (exact->inexact sample-rate))
+  (define reasonable-devices (reasonable-latency-output-devices))
+  (when (null? reasonable-devices)
+    (error 'stream-choose "no devices available with 50ms latency or less."))
+  (define default-device (pa-get-default-output-device))
+  (define selected-device 
+    (cond [(member default-device reasonable-devices) default-device]
+          [else (car reasonable-devices)]))
+  (define output-stream-parameters
+    (make-pa-stream-parameters
+     selected-device
+     2
+     'paInt16
+     suggested-latency
+     #f))
+  (pa-open-stream
+   #f ;; input parameters
+   output-stream-parameters
+   sr/i
+   0 ;; frames-per-buffer
+   '() ;; stream-flags
+   streaming-callback
+   stream-info))
+
+
+;; reasonable-latency-output-devices : -> (list-of natural?)
+;; output devices with less than 50ms latencies
+(define (reasonable-latency-output-devices)
+  (for/list ([i (in-range (pa-get-device-count))]
+        #:when (has-outputs? i)
+        #:when (reasonable-latency? i))
+    i))
+
+;; has-outputs? : natural -> boolean
+;; return true if the device has at least
+;; two output channels
+(define (has-outputs? i)
+  (<= 2 (pa-device-info-max-output-channels (pa-get-device-info i))))
+
+;; reasonable-latency? : natural -> boolean
+;; return true when the device has low latency
+;; no greater than 50ms
+(define (reasonable-latency? i)
+  (<= (pa-device-info-default-output-latency (pa-get-device-info i))
+      reasonable-latency))
+
+
+(define suggested-latency 0.05)
+(define reasonable-latency 0.05)
