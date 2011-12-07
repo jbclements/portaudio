@@ -38,6 +38,14 @@
  and @racket[stream-play], and @racket[stream-play/unsafe], 
  for playing sounds and streams. The first two are safe.
  These are documented below.
+ 
+ Platforms differ in their support for simultaneous streams. The
+ Mac OS X Coreaudio API seems able to support hundreds of simultaneous
+ streams. The Windows API's that I've tested don't reliably support
+ more than one. On platforms that don't support more than one stream,
+ then, playing multiple sounds at once requires adding them all to 
+ one stream. This solution also has the advantage of substantially 
+ lower latency.
 
  Cheers!}
 
