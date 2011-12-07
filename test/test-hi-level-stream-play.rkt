@@ -38,7 +38,7 @@
 
 
 (sleep 3.0)
-(stopper)
+(stopper #:stream-info #t)
 
 ;; fails
 (printf "fails: ~s\n" (length (filter not log1)))

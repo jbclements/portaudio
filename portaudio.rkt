@@ -749,7 +749,7 @@ typedef unsigned long PaSampleFormat;
      paNonInterleaved = #x80000000)))
 
 
-(define _pa-stream _pointer)
+(define _pa-stream-pointer _pointer)
 
 #|
 
@@ -781,8 +781,8 @@ typedef struct PaDeviceInfo
    [host-api            _pa-host-api-index]
    [max-input-channels  _int]
    [max-output-channels _int]
-   [default-input-latency       _pa-time]
-   [default-output-latency      _pa-time]
+   [default-low-input-latency   _pa-time]
+   [default-low-output-latency  _pa-time]
    [default-high-input-latency  _pa-time]
    [default-high-output-latency _pa-time]))
 
@@ -808,13 +808,7 @@ const PaDeviceInfo* Pa_GetDeviceInfo( PaDeviceIndex device );
                libportaudio
                (_fun _pa-device-index -> _pa-device-info-pointer)))
 
-(define (enumerate-available-devices)
-  (for/list ([i (in-range (pa-get-device-count))])
-    (pa-device-info->list (pa-get-device-info i))))
 
-(define (default-device-info)
-  (pa-device-info->list (pa-get-device-info 
-                         (pa-get-default-output-device))))
 
 #|
 
@@ -907,6 +901,16 @@ PaError Pa_IsFormatSupported( const PaStreamParameters *inputParameters,
                               const PaStreamParameters *outputParameters,
                               double sampleRate );
 
+|#
+(define pa-is-format-supported
+  (get-ffi-obj "Pa_IsFormatSupported"
+               libportaudio
+               (_fun _pa-stream-parameters-pointer/null
+                     _pa-stream-parameters-pointer/null
+                     _double
+                     -> _pa-error)))
+
+#|
 
 
 /* Streaming types and functions */
@@ -1249,7 +1253,7 @@ PaError Pa_OpenStream( PaStream** stream,
 (define pa-open-stream
   (get-ffi-obj "Pa_OpenStream"
                libportaudio
-               (_fun (result : (_ptr o _pa-stream)) ;; stream
+               (_fun (result : (_ptr o _pa-stream-pointer)) ;; stream
                      _pa-stream-parameters-pointer/null ;; inputParameters
                      _pa-stream-parameters-pointer/null ;; outputParameters
                      _double ;; sampleRate
@@ -1310,7 +1314,7 @@ PaError Pa_OpenDefaultStream( PaStream** stream,
 (define pa-open-default-stream
   (get-ffi-obj "Pa_OpenDefaultStream"
                libportaudio
-               (_fun (result : (_ptr o _pa-stream)) ;; stream
+               (_fun (result : (_ptr o _pa-stream-pointer)) ;; stream
                      _int ;; numInputChannels
                      _int ;; numOutputChannels
                      _pa-sample-format ;; sampleFormat
@@ -1350,7 +1354,7 @@ PaError Pa_CloseStream( PaStream *stream );
 (define-checked pa-close-stream/raw
   (get-ffi-obj "Pa_CloseStream"
                libportaudio
-               (_fun _pa-stream -> _pa-error)))
+               (_fun _pa-stream-pointer -> _pa-error)))
 
 #|
 
@@ -1398,7 +1402,7 @@ PaError Pa_SetStreamFinishedCallback( PaStream *stream, PaStreamFinishedCallback
 (define-checked pa-set-stream-finished-callback
   (get-ffi-obj "Pa_SetStreamFinishedCallback"
                libportaudio
-               (_fun _pa-stream _pa-stream-finished-callback -> _pa-error)))
+               (_fun _pa-stream-pointer _pa-stream-finished-callback -> _pa-error)))
 #|
 
 /** Commences audio processing.
@@ -1408,7 +1412,7 @@ PaError Pa_StartStream( PaStream *stream );
 (define-checked pa-start-stream
   (get-ffi-obj "Pa_StartStream"
                libportaudio
-               (_fun _pa-stream -> _pa-error)))
+               (_fun _pa-stream-pointer -> _pa-error)))
 
 #|
 
@@ -1424,7 +1428,7 @@ PaError Pa_StopStream( PaStream *stream );
 (define-checked pa-stop-stream/raw
   (get-ffi-obj "Pa_StopStream"
                libportaudio
-               (_fun _pa-stream -> _pa-error)))
+               (_fun _pa-stream-pointer -> _pa-error)))
 
 #|
 
@@ -1441,7 +1445,7 @@ PaError Pa_AbortStream( PaStream *stream );
 (define-checked pa-abort-stream/raw
   (get-ffi-obj "Pa_AbortStream"
                libportaudio
-               (_fun _pa-stream -> _pa-error)))
+               (_fun _pa-stream-pointer -> _pa-error)))
 
 
 
@@ -1466,7 +1470,7 @@ PaError Pa_IsStreamStopped( PaStream *stream );
 (define pa-stream-stopped?
   (get-ffi-obj "Pa_IsStreamStopped"
                libportaudio
-               (_fun _pa-stream 
+               (_fun _pa-stream-pointer 
                      -> (result : _int)
                      -> (cond [(= result 0) #f]
                               [(= result 1) #t]
@@ -1493,7 +1497,7 @@ PaError Pa_IsStreamActive( PaStream *stream );
 (define pa-stream-active?
   (get-ffi-obj "Pa_IsStreamActive"
                libportaudio
-               (_fun _pa-stream 
+               (_fun _pa-stream-pointer 
                      -> (result : _int)
                      -> (cond [(= result 0) #f]
                               [(= result 1) #t]
@@ -1575,7 +1579,7 @@ PaTime Pa_GetStreamTime( PaStream *stream );
 (define pa-get-stream-time
   (get-ffi-obj "Pa_GetStreamTime"
                libportaudio
-               (_fun _pa-stream 
+               (_fun _pa-stream-pointer 
                      -> (result : _pa-time)
                      -> (cond [(= 0.0 result) 
                                (error 'pa-get-stream-time
@@ -1602,6 +1606,14 @@ PaTime Pa_GetStreamTime( PaStream *stream );
 */
 double Pa_GetStreamCpuLoad( PaStream* stream );
 
+|#
+(define (pa-get-stream-cpu-load stream)
+  (get-ffi-obj "Pa_GetStreamCpuLoad"
+               libportaudio
+               (_fun _pa-stream-pointer -> _double)))
+
+
+#|
 
 /** Read samples from an input stream. The function doesn't return until
  the entire buffer has been filled - this may involve waiting for the operating
@@ -1634,7 +1646,7 @@ PaError Pa_ReadStream( PaStream* stream,
 (define-checked pa-read-stream
   (get-ffi-obj "Pa_ReadStream"
                libportaudio
-               (_fun _pa-stream _pointer _ulong -> _pa-error)))
+               (_fun _pa-stream-pointer _pointer _ulong -> _pa-error)))
 
 #|
 
@@ -1668,7 +1680,7 @@ PaError Pa_WriteStream( PaStream* stream,
 (define-checked pa-write-stream
   (get-ffi-obj "Pa_WriteStream"
                libportaudio
-               (_fun _pa-stream _pointer _ulong -> _pa-error)))
+               (_fun _pa-stream-pointer _pointer _ulong -> _pa-error)))
 
 #|
 
@@ -1688,7 +1700,7 @@ signed long Pa_GetStreamReadAvailable( PaStream* stream );
 (define pa-get-stream-read-available
   (get-ffi-obj "Pa_GetStreamReadAvailable"
                libportaudio
-               (_fun _pa-stream -> 
+               (_fun _pa-stream-pointer -> 
                      [err-or-result : _pa-error]
                      -> (cond [(< err-or-result 0) 
                                (error 'pa-get-stream-read-available "~a" 
@@ -1712,7 +1724,7 @@ signed long Pa_GetStreamWriteAvailable( PaStream* stream );
 (define pa-get-stream-write-available
   (get-ffi-obj "Pa_GetStreamWriteAvailable"
                libportaudio
-               (_fun _pa-stream -> 
+               (_fun _pa-stream-pointer -> 
                      [err-or-result : _slong]
                      -> (cond [(< err-or-result 0) 
                                (error 'pa-get-stream-write-available "~a" 
@@ -1793,4 +1805,45 @@ void Pa_Sleep( long msec );
 ;; the number of times to try terminating before giving up:
 (define terminate-absurd-threshold 1000000)
 
+;; UTILITIES
+
+(define (stream-stats stream)
+  `(cpu-load ,(pa-get-stream-cpu-load stream)))
+
+;; provide information on all of the available devices
+(define (available-devices-info)
+  (for/list ([i (in-range (pa-get-device-count))])
+    (pa-device-info->list (pa-get-device-info i))))
+
+;; provide information on the default device
+(define (default-device-info)
+  (pa-device-info->list (pa-get-device-info 
+                         (pa-get-default-output-device))))
+
+;; device-name : natural -> string
+;; return the name of the device with the given device number
+(define (device-name i)
+  (pa-device-info-name (pa-get-device-info i)))
+
+
+;; reasonable-latency-output-devices : real -> (list-of natural?)
+;; output devices with reasonable latency
+(define (low-latency-output-devices latency)
+  (for/list ([i (in-range (pa-get-device-count))]
+        #:when (has-outputs? i)
+        #:when (reasonable-latency? latency i))
+    i))
+
+;; has-outputs? : natural -> boolean
+;; return true if the device has at least
+;; two output channels
+(define (has-outputs? i)
+  (<= 2 (pa-device-info-max-output-channels (pa-get-device-info i))))
+
+;; reasonable-latency? : natural real -> boolean
+;; return true when the device has low latency
+;; no greater than 50ms
+(define (reasonable-latency? latency i)
+  (<= (pa-device-info-default-low-output-latency (pa-get-device-info i))
+      latency))
 

@@ -96,8 +96,8 @@ int streamingCallback(
   unsigned int bytesInEnd;
   unsigned int bytesAtBeginning;
   
-  if (frameCount > (unsigned long)(ssi->bufferFrames / 2)) {
-    fprintf(stderr,"system requested %ld bytes, too many for buffer of length %d\n",
+  if (frameCount > (unsigned long)(ssi->bufferFrames)) {
+    fprintf(stderr,"system requested %ld frames, too many for buffer of length %d\n",
             frameCount, ssi->bufferFrames);
     return(paAbort);
   }

@@ -13,7 +13,7 @@
 (define buffer-filler/c (c-> procedure? nat? nat? void?))
 (define buffer-filler/unsafe/c (c-> cpointer? nat? nat? void?))
 (define time-checker/c (c-> number?))
-(define sound-killer/c (c-> void?))
+(define sound-killer/c (->* () (#:stream-info boolean?) void?))
 
 (provide/contract [stream-play
                    (c-> buffer-filler/c real? real? 
@@ -36,7 +36,6 @@
   (pa-maybe-initialize)
   (match-define (list stream-info all-done-ptr)
     (make-streaming-info buffer-frames))
-  (define sr/i (exact->inexact sample-rate))
   (define stream
     (stream-choose stream-info sample-rate))
   (pa-set-stream-finished-callback stream
@@ -62,7 +61,10 @@
   (pa-start-stream stream)
   (define (stream-time)
     (pa-get-stream-time stream))
-  (define (stopper)
+  (define (stopper #:stream-info [get-stream-info? #f])
+    (when get-stream-info?
+      #;(pa-get-stream-info stream)
+      3)
     (pa-maybe-stop-stream stream))
   (list stream-time stopper))
 
@@ -100,50 +102,47 @@
 ;; a reasonable latency, and open that device.
 (define (stream-choose stream-info sample-rate)
   (define sr/i (exact->inexact sample-rate))
-  (define reasonable-devices (reasonable-latency-output-devices))
+  (define reasonable-devices (low-latency-output-devices reasonable-latency))
   (when (null? reasonable-devices)
-    (error 'stream-choose "no devices available with 50ms latency or less."))
+    (error 'stream-choose "no devices available with ~sms latency or less."
+           (* 1000 reasonable-latency)))
   (define default-device (pa-get-default-output-device))
   (define selected-device 
     (cond [(member default-device reasonable-devices) default-device]
-          [else (car reasonable-devices)]))
-  (define output-stream-parameters
+          [else (fprintf 
+                 (current-error-port)
+                 "default output device doesn't support low-latency (~sms) output, using device ~s instead"
+                 (* 1000 reasonable-latency)
+                 (device-name (car reasonable-devices)))
+                (car reasonable-devices)]))
+  #;(printf "default output device: ~s\n" default-device)
+  (pa-open-default-stream
+   0
+   2
+   '(paInt16)
+   44100.0
+   0
+   streaming-callback
+   stream-info)
+  #;(define output-stream-parameters
     (make-pa-stream-parameters
      selected-device
      2
-     'paInt16
-     suggested-latency
+     '(paInt16)
+     0.1 #;suggested-latency
      #f))
-  (pa-open-stream
+  #;(printf "is format supported: ~s\n"
+          (pa-is-format-supported #f output-stream-parameters 44100.0))
+  #;(pa-open-stream
    #f ;; input parameters
    output-stream-parameters
-   sr/i
+   44100.0
    0 ;; frames-per-buffer
-   '() ;; stream-flags
+   '(pa-no-flag) ;; stream-flags
    streaming-callback
    stream-info))
 
 
-;; reasonable-latency-output-devices : -> (list-of natural?)
-;; output devices with less than 50ms latencies
-(define (reasonable-latency-output-devices)
-  (for/list ([i (in-range (pa-get-device-count))]
-        #:when (has-outputs? i)
-        #:when (reasonable-latency? i))
-    i))
-
-;; has-outputs? : natural -> boolean
-;; return true if the device has at least
-;; two output channels
-(define (has-outputs? i)
-  (<= 2 (pa-device-info-max-output-channels (pa-get-device-info i))))
-
-;; reasonable-latency? : natural -> boolean
-;; return true when the device has low latency
-;; no greater than 50ms
-(define (reasonable-latency? i)
-  (<= (pa-device-info-default-output-latency (pa-get-device-info i))
-      reasonable-latency))
 
 
 (define suggested-latency 0.05)
