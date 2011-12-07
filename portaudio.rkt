@@ -1251,8 +1251,6 @@ PaError Pa_OpenStream( PaStream** stream,
 
 |#
 
-;; *** UNTESTED ***:
-
 (define pa-open-stream
   (get-ffi-obj "Pa_OpenStream"
                libportaudio

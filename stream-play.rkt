@@ -29,26 +29,32 @@
 
 (define channels 2)
 
-(define sleep-time 0.01)
+;; we insist on an engine with latency at least this low:
+(define reasonable-latency 0.05)
+;; the wake interval for the buffer-filler:
+(define sleep-interval 0.01)
 
 ;; given a buffer-filler and a frame length and a sample rate,
 ;; starts a stream, using the buffer-filler to provide data as
 ;; needed.
 (define (stream-play/unsafe buffer-filler buffer-time sample-rate)
-  (define buffer-frames (buffer-time->frames buffer-time sample-rate))
   (pa-maybe-initialize)
+  (define chosen-device (device-choose))
+  (define promised-latency (device-low-output-latency chosen-device))
+  ;; totally heuristic here:
+  (define min-buffer-time (+ promised-latency (* 2 sleep-interval)))
+  (when (< buffer-time min-buffer-time)
+    (fprintf (current-error-port) "WARNING: using buffer of ~sms to satisfy API requirements.\n"
+             (* 1000 min-buffer-time)))
+  (log-debug (format "chosen latency: ~sms" (* 1000 (max min-buffer-time buffer-time))))
+  (define buffer-frames (buffer-time->frames (max min-buffer-time buffer-time) sample-rate))
   (match-define (list stream-info all-done-ptr)
     (make-streaming-info buffer-frames))
-  (define stream
-    (stream-choose stream-info sample-rate))
+  (define stream (stream-open stream-info chosen-device promised-latency sample-rate))
   (pa-set-stream-finished-callback stream
                                    streaming-info-free)
   ;; pre-fill of first buffer:
   (call-buffer-filler stream-info buffer-filler)
-  ;; 5ms should definitely be fast enough. 
-  ;; really, it's kind of outrageously fast, but 
-  ;; the price seems low.
-  (define sleep-interval 0.005)
   (define filling-thread
     (thread
      (lambda ()
@@ -98,12 +104,10 @@
    (ceiling (* buffer-time sample-rate))))
 
 
-;; stream-choose : stream-info number -> stream
-;; given a stream-info and a sample-rate, search for an 
-;; output device that can provide output channels with 
-;; a reasonable latency, and open that device.
-(define (stream-choose stream-info sample-rate)
-  (define sr/i (exact->inexact sample-rate))
+;; device-choose : -> natural?
+;; return the device number of an output device with two channels
+;; and reasonable latency.
+(define (device-choose)
   (define reasonable-devices (low-latency-output-devices reasonable-latency))
   (when (null? reasonable-devices)
     (error 'stream-choose "no devices available with ~sms latency or less."
@@ -117,12 +121,18 @@
                  (* 1000 reasonable-latency)
                  (device-name (car reasonable-devices)))
                 (car reasonable-devices)]))
+  selected-device)
+
+;; stream-open : stream-info natural? real? real? -> stream
+;; open the given device using the given stream-info, latency, and sample-rate.
+(define (stream-open stream-info device-number latency sample-rate)
+  (define sr/i (exact->inexact sample-rate))
   (define output-stream-parameters
     (make-pa-stream-parameters
-     selected-device ;; device
-     2               ;; channels
-     '(paInt16)      ;; sample format
-     (device-low-output-latency selected-device) ;; latency
+     device-number ;; device
+     2             ;; channels
+     '(paInt16)    ;; sample format
+     latency       ;; latency
      #f))            ;; host-specific info
   (pa-open-stream
    #f ;; input parameters
@@ -132,5 +142,3 @@
    '() ;; stream-flags
    streaming-callback
    stream-info))
-
-(define reasonable-latency 0.05)

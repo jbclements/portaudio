@@ -102,15 +102,16 @@ to call this for sounds that are really big (> 100MB?).
 @defproc[(stream-play [buffer-filler (-> buffer-setter? nat? nat? void?)] 
                       [buffer-time nonnegative-real?] 
                       [sample-rate nonnegative-real?])
-         (list/c (-> real?) (-> void?))]{
+         (list/c (-> real?) (-> (list-of (list/c symbol? number?)))(-> void?))]{
  Given a buffer-filling callback and a buffer time (in seconds) and a sample
  rate, starts playing a stream that uses the given callback to supply data.
  The buffer-filler receives three arguments: a procedure that can be used
  to mutate the buffer, the length of the buffer in frames, and the frame-number
  to start at.
  
- The function returns a list contaning two functions: one that queries the
- stream for a time in seconds, and the other that stops the stream.
+ The function returns a list containing three functions: one that queries the
+ stream for a time in seconds, one that returns statistics about the stream, 
+ and a third that stops the stream.
  
  This function is believed safe; it should not be possible to crash DrRacket
  by using this function badly (unless you exhaust memory by choosing an 
