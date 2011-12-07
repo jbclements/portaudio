@@ -746,7 +746,8 @@ typedef unsigned long PaSampleFormat;
      paUInt8          = #x00000020
      paCustomFormat   = #x00010000
      
-     paNonInterleaved = #x80000000)))
+     paNonInterleaved = #x80000000)
+   _ulong))
 
 
 (define _pa-stream-pointer _pointer)
@@ -1001,7 +1002,8 @@ typedef unsigned long PaStreamFlags;
      pa-dither-off              = #x00000002
      pa-never-drop-input        = #x00000004
      pa-prime-output-buffers-using-stream-callback = #x00000008
-     pa-platform-specific-flags = #xFFFF0000)))
+     pa-platform-specific-flags = #xFFFF0000)
+   _ulong))
 
 
 #|
@@ -1077,7 +1079,8 @@ typedef unsigned long PaStreamCallbackFlags;
      pa-input-overflow   = #x00000002
      pa-output-underflow = #x00000004
      pa-output-overflow  = #x00000008
-     pa-priming-output   = #x00000010)))
+     pa-priming-output   = #x00000010)
+   _ulong))
 
 #|
 
@@ -1541,6 +1544,15 @@ typedef struct PaStreamInfo
     
 } PaStreamInfo;
 
+|#
+
+(define-cstruct _pa-stream-info
+  ([struct-version _int]
+   [input-latency  _pa-time]
+   [output-latency _pa-time]
+   [sample-rate    _double]))
+
+#|
 
 /** Retrieve a pointer to a PaStreamInfo structure containing information
  about the specified stream.
@@ -1557,6 +1569,12 @@ typedef struct PaStreamInfo
 */
 const PaStreamInfo* Pa_GetStreamInfo( PaStream *stream );
 
+|#
+(define pa-get-stream-info
+  (get-ffi-obj "Pa_GetStreamInfo"
+               libportaudio
+               (_fun _pa-stream-pointer -> _pa-stream-info-pointer)))
+#|
 
 /** Returns the current time in seconds for a stream according to the same clock used
  to generate callback PaStreamCallbackTimeInfo timestamps. The time values are
@@ -1607,7 +1625,12 @@ PaTime Pa_GetStreamTime( PaStream *stream );
 double Pa_GetStreamCpuLoad( PaStream* stream );
 
 |#
-(define (pa-get-stream-cpu-load stream)
+
+;; note that in the way this package is used by the built-in callbacks,
+;; this number will be very low, because it only includes time spent 
+;; copying (in C), not time spent generating samples (in Racket)
+
+(define pa-get-stream-cpu-load
   (get-ffi-obj "Pa_GetStreamCpuLoad"
                libportaudio
                (_fun _pa-stream-pointer -> _double)))
@@ -1808,7 +1831,11 @@ void Pa_Sleep( long msec );
 ;; UTILITIES
 
 (define (stream-stats stream)
-  `(cpu-load ,(pa-get-stream-cpu-load stream)))
+  (define stream-info (pa-get-stream-info stream))
+  `((cpu-load ,(pa-get-stream-cpu-load stream))
+    (input-latency ,(pa-stream-info-input-latency stream-info))
+    (output-latency ,(pa-stream-info-output-latency stream-info))
+    (sample-rate ,(pa-stream-info-sample-rate stream-info))))
 
 ;; provide information on all of the available devices
 (define (available-devices-info)
@@ -1842,8 +1869,12 @@ void Pa_Sleep( long msec );
 
 ;; reasonable-latency? : natural real -> boolean
 ;; return true when the device has low latency
-;; no greater than 50ms
+;; no greater than some threshold
 (define (reasonable-latency? latency i)
-  (<= (pa-device-info-default-low-output-latency (pa-get-device-info i))
-      latency))
+  (<= (device-low-output-latency i) latency))
+
+;; device-low-output-latency : natural -> real
+;; return the low output latency of a device 
+(define (device-low-output-latency i)
+  (pa-device-info-default-low-output-latency (pa-get-device-info i)))
 

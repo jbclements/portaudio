@@ -13,15 +13,18 @@
 (define buffer-filler/c (c-> procedure? nat? nat? void?))
 (define buffer-filler/unsafe/c (c-> cpointer? nat? nat? void?))
 (define time-checker/c (c-> number?))
-(define sound-killer/c (->* () (#:stream-info boolean?) void?))
+(define sound-killer/c (c-> void?))
+(define stats/c (c-> (listof (list/c symbol? number?))))
 
 (provide/contract [stream-play
                    (c-> buffer-filler/c real? real? 
                         (list/c time-checker/c
+                                stats/c
                                 sound-killer/c))]
                   [stream-play/unsafe 
                    (c-> procedure? real? real? 
                         (list/c time-checker/c
+                                stats/c
                                 sound-killer/c))])
 
 (define channels 2)
@@ -61,12 +64,11 @@
   (pa-start-stream stream)
   (define (stream-time)
     (pa-get-stream-time stream))
-  (define (stopper #:stream-info [get-stream-info? #f])
-    (when get-stream-info?
-      #;(pa-get-stream-info stream)
-      3)
+  (define (stats)
+    (stream-stats stream))
+  (define (stopper)
     (pa-maybe-stop-stream stream))
-  (list stream-time stopper))
+  (list stream-time stats stopper))
 
 ;; the safe version checks the index of each sample before it's 
 ;; used in a ptr-set!
@@ -115,35 +117,20 @@
                  (* 1000 reasonable-latency)
                  (device-name (car reasonable-devices)))
                 (car reasonable-devices)]))
-  #;(printf "default output device: ~s\n" default-device)
-  (pa-open-default-stream
-   0
-   2
-   '(paInt16)
-   44100.0
-   0
-   streaming-callback
-   stream-info)
-  #;(define output-stream-parameters
+  (define output-stream-parameters
     (make-pa-stream-parameters
-     selected-device
-     2
-     '(paInt16)
-     0.1 #;suggested-latency
-     #f))
-  #;(printf "is format supported: ~s\n"
-          (pa-is-format-supported #f output-stream-parameters 44100.0))
-  #;(pa-open-stream
+     selected-device ;; device
+     2               ;; channels
+     '(paInt16)      ;; sample format
+     (device-low-output-latency selected-device) ;; latency
+     #f))            ;; host-specific info
+  (pa-open-stream
    #f ;; input parameters
    output-stream-parameters
-   44100.0
+   sr/i
    0 ;; frames-per-buffer
-   '(pa-no-flag) ;; stream-flags
+   '() ;; stream-flags
    streaming-callback
    stream-info))
 
-
-
-
-(define suggested-latency 0.05)
 (define reasonable-latency 0.05)

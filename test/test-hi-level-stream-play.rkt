@@ -32,13 +32,14 @@
 (collect-garbage)
 (collect-garbage)
 (collect-garbage)
-(match-define (list checker stopper)
+(match-define (list checker stats stopper)
   (stream-play buffer-filler 0.05 44100))
 (set! time-checker checker)
 
 
 (sleep 3.0)
-(stopper #:stream-info #t)
+(stats)
+(stopper)
 
 ;; fails
 (printf "fails: ~s\n" (length (filter not log1)))
@@ -60,10 +61,11 @@
       (set! log2 (cons pre-time #;(- post-time pre-time) log2))
       (set! log2 (cons #f log2))))
 
-(match-define (list checker2 stopper2)
+(match-define (list checker2 stats2 stopper2)
   (stream-play/unsafe buffer-filler/unsafe 0.025 44100))
 (set! time-checker checker2)
 (sleep 0.5)
+(stats2)
 (stopper2)
 
 ;; fails
