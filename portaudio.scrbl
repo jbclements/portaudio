@@ -45,7 +45,12 @@
  more than one. On platforms that don't support more than one stream,
  then, playing multiple sounds at once requires adding them all to 
  one stream. This solution also has the advantage of substantially 
- lower latency.
+ lower latency. The RSound library provides support for this, in
+ the form of its @racket[play/s] function.
+ 
+ My ability to test on different platforms is limited; I'm always 
+ eager to hear about successes and failures that people experience
+ with different OS / Hardware combinations.
 
  Cheers!}
 
@@ -169,3 +174,84 @@ put up with the occasional miss in return for lower latency.
  
  }
 
+@section{A Note on Memory, Synchronization, and Concurrency}
+
+@emph{Note: the following is not organized to the high standards of a technical paper.
+The Management would like to apologize in advance, and humbly requests
+your forgiveness.}
+
+Interacting with sound libraries is tricky. The basic framework for this 
+library is what's called a "pull" architecture; the OS makes a call to 
+a callback every 5-50ms[*], asking for new data to be shoveled into 
+a given buffer. This callback runs on a separate OS thread, which means
+that Racket must somehow synchronize with this thread to provide data
+when needed.
+
+One difficulty here is that Racket is garbage-collected, with GC pauses
+that typically run from 50ms to 100ms. This means that when a program 
+is generating garbage, there are simply bound to be hiccoughs in a stream-based
+program. In general,
+these don't seem to be too awful, and it's often possible to write programs
+that generate very little garbage.
+
+After trying several architectures, the model that seems to work the 
+best is a shared-memory design, where the callback is written entirely
+in C, and takes its data from a buffer shared with Racket. If Racket
+has written the data into the buffer, then this routine copies it into
+the OS's buffer. If not, then it just zeros out the buffer to play silence.
+
+@subsection{Copying Vs. Streaming}
+
+This package supports two different play interfaces: a "copying" interface
+and a "streaming" interface.
+
+The copying interface is simple: Racket stuffs an entire sound into a buffer,
+then opens a new stream, providing a callback that pulls samples out of the buffer until it's
+done. This means that the sound is not affected by GC pauses or Racket's 
+speed. On the other hand, it means duplicating the entire sound (expensive,
+for large sounds), and it requires a platform that can support multiple streams
+simultaneously. (OS X, yes. Windows, usually no.) Also, it tends to have higher
+startup latency (especially on windows), because there's time required to start
+a new stream.
+
+The streaming interface solves these problems, but exposes more of the grotty
+stuff to the programmer.  Rather than providing sound data, the user provides 
+a racket callback that can generate sound data on demand. If the given callback
+can't keep up with the demand, the stream starts to hiccough.
+
+More specifically, this package uses a ring buffer, whose length can be
+specified independently of the underlying machine latency. The Portaudio
+engine calls the user's racket callback quite frequently--on the order of 
+every 1-5ms--to top up this ring buffer.  When GC pauses occur, the C
+callback will drink up everything left in the ring buffer, and then just 
+play silence.  
+
+Choosing the length of this ring buffer is therefore difficult: too short, and
+you'll hear frequent hiccoughs as the C callback runs out of data. Too long, and 
+you get high-latency, sluggish response. Times on the order of 50ms seem to be 
+an acceptable compromise.
+
+@subsection{Memory}
+
+Shared memory management is a big pain. Racket is garbage-collected, but it's
+interacting with an audio library that is not. It's nearly impossible to 
+avoid all possible race conditions related to the free-ing of memory.
+
+The first and largest issue is the block of memory shared between the Racket
+engine and the C callback. The current setup is that the memory is freed by
+a close-stream callback associated with the stream on the Portaudio side. 
+The sequence is therefore this: Racket calls CloseStream. Portaudio then stops
+calling the callback, and closes the stream. Then, it calls the provided
+"all-done" callback, which frees the memory. One note here is that Racket
+should probably wrap the pointer in a mutable object so that it can be severed
+on the Racket side when the stream is closed. Actually, that's true of the 
+stream, as well.
+
+
+
+
+
+[*] Different platforms are different; currently, this package insists on
+a latency of at most 50ms, or it just refuses to run. It appears that all
+modern platform can provide this, though it's sometimes a bit tricky to 
+decide which output device to use.
