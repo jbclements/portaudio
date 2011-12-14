@@ -11,10 +11,9 @@
 
 (define scribblings '(("portaudio.scrbl" () (tool))))
 (define categories '(media))
-(define version "2011-12-07-11:09")
-(define release-notes '((p "more intelligent stream selection, "
-                           "more recent version of windows dll, "
-                           "support for ASIO API on windows.")))
+(define version "2011-12-14-12:44")
+(define release-notes '((p "better heuristics for latency selection, "
+                           "more documentation")))
 
 ;; planet-specific:
 (define repositories '("4.x"))
