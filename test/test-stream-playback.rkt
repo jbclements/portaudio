@@ -85,7 +85,7 @@
     (define stream (open-test-stream streaming-callback
                                      stream-info))
     (pa-set-stream-finished-callback stream streaming-info-free)
-    (printf "total silence\n")
+    (printf "total silence, 20ms racket callback interval\n")
     (test-start)
     (pa-start-stream stream)
     (define log empty)
@@ -138,8 +138,8 @@
     (match-define (list stream-info all-done-ptr) (make-streaming-info buffer-frames))
     (define stream (open-test-stream streaming-callback stream-info))
     (pa-set-stream-finished-callback stream streaming-info-free)
-    (printf "tone at 403 Hz\n")
-    (define sleep-interval (/ (* 0.8 buffer-frames) 44100))
+    (printf "tone at 403 Hz, 46 ms ring buffer, 20ms callback interval, lots of gc\n")
+    (define sleep-interval 0.02)
     (define detected-all-done #f)
     (define filling-thread
       (thread

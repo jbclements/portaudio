@@ -120,10 +120,10 @@
   (stream-rec-fault-count stream-rec))
 
 ;; create a fresh streaming-sound-info structure, including
-;; four buffers to be used in rendering the sound.
+;; a ring buffer to be used in rendering the sound.
 (define (make-streaming-info buffer-frames)
   ;; we must use the malloc defined in the dll here, to
-  ;; avoid hideous windows unpleasantness.
+  ;; keep windows happy.
   (define info (cast (dll-malloc (ctype-sizeof _stream-rec))
                      _pointer
                      _stream-rec-pointer))
@@ -189,38 +189,6 @@
     ;; update the stream-rec
     (set-stream-rec-last-frame-written! stream-info last-frame-to-write)
     (set-stream-rec-last-offset-written! stream-info last-offset-to-write)))
-
-;; if a buffer needs to be filled, return the info needed to fill it
-#;(define (buffer-if-waiting stream-info)
-  (define next-to-be-used (add1 (stream-rec-last-used stream-info)))
-  (define buf-numbers (stream-rec-buf-numbers stream-info))
-  (define buffer-index (modulo next-to-be-used streambufs))
-  (cond [(= (hack-array-ref-2 buf-numbers buffer-index)
-            next-to-be-used)
-         ;; already present:
-         #f]
-        [else (list 
-               ;; the pointer to the next buffer:
-               (hack-array-ref (stream-rec-buffers stream-info)
-                               buffer-index)
-               ;; the length of the buffer:
-               (stream-rec-buffer-frames stream-info)
-               ;; the index of the next buffer:
-               next-to-be-used
-               ;; a thunk to use to indicate it's ready:
-               (lambda ()
-                 ;; CAN'T DO THIS IN 5.1.3, USE HACK:
-                 #;(array-set! buf-numbers
-                             buffer-index
-                             next-to-be-used)
-                 ;; HERE'S THE HACK:
-                 (define updater!
-                   (case buffer-index
-                     [(0) set-array-hack-2-a!]
-                     [(1) set-array-hack-2-b!]
-                     [(2) set-array-hack-2-c!]
-                     [(3) set-array-hack-2-d!]))
-                 (updater! buf-numbers next-to-be-used)))]))
 
 ;; FFI OBJECTS FROM THE C CALLBACK LIBRARY
 

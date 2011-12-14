@@ -29,6 +29,7 @@
       (set! log1 (cons (- post-time pre-time) log1))
       (set! log1 (cons #f log1))))
 
+(printf "3 seconds of 403 Hz, 50ms buffer length\n")
 (collect-garbage)
 (collect-garbage)
 (collect-garbage)
@@ -60,6 +61,8 @@
   (if (and pre-time post-time)
       (set! log2 (cons pre-time #;(- post-time pre-time) log2))
       (set! log2 (cons #f log2))))
+
+(printf "1/2 second at 403 Hz, 25ms buffer length.\n")
 
 (match-define (list checker2 stats2 stopper2)
   (stream-play/unsafe buffer-filler/unsafe 0.025 44100))
