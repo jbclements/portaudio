@@ -40,13 +40,16 @@
 (define (stream-play/unsafe buffer-filler buffer-time sample-rate)
   (pa-maybe-initialize)
   (define chosen-device (device-choose))
+  (log-debug (format "Portaudio: chosen number/name: ~s,~s"
+                     chosen-device
+                     (device-name chosen-device)))
   (define promised-latency (device-low-output-latency chosen-device))
   ;; totally heuristic here:
   (define min-buffer-time (+ promised-latency (* 2 sleep-interval)))
   (when (< buffer-time min-buffer-time)
     (fprintf (current-error-port) "WARNING: using buffer of ~sms to satisfy API requirements.\n"
              (* 1000 min-buffer-time)))
-  (log-debug (format "chosen latency: ~sms" (* 1000 (max min-buffer-time buffer-time))))
+  (log-debug (format "Portaudio: chosen device requested latency: ~sms" (round-to-hundredth (* 1000 promised-latency))))
   (define buffer-frames (buffer-time->frames (max min-buffer-time buffer-time) sample-rate))
   (match-define (list stream-info all-done-ptr)
     (make-streaming-info buffer-frames))
@@ -142,3 +145,6 @@
    '() ;; stream-flags
    streaming-callback
    stream-info))
+
+(define (round-to-hundredth x)
+  (/ (round (* x 100)) 100))
