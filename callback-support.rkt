@@ -33,6 +33,13 @@
  [copying-callback cpointer?]
  ;; the free function for a copying callback
  [copying-info-free cpointer?]
+ 
+ ;; make a sndplay record for playing a precomputed sound.
+ [make-copying-info/rec (c-> s16vector? nat? (or/c false? nat?) cpointer?)]
+ ;; the raw pointer to the copying callback, for use with
+ ;; a sndplay record:
+ [copying-callback/rec cpointer?]
+ 
  ;; make a streamplay record for playing a stream.
  [make-streaming-info (c-> integer? (list/c cpointer? cpointer?))]
  ;; is the stream all done?
@@ -61,11 +68,12 @@
 (define s16max 32767)
 (define sample-bytes (ctype-sizeof _sint16))
 
-(define (frames->bytes f) (* channels sample-bytes f))
+(define (frames->bytes f) (* channels (samples->bytes f)))
 ;; this should never be a non-integer. Typed racket would help here.
 (define (bytes->frames b) (/ b (* channels sample-bytes)))
+(define (samples->bytes f) (* sample-bytes f))
 
-;; COPYING CALLBACK STRUCT
+;; COPYING CALLBACK STRUCT ... we can use this for recording, too.
 (define-cstruct _copying-rec
   ([sound         _pointer]
    [cur-sample    _ulong]
@@ -90,6 +98,28 @@
   (set-copying-rec-cur-sample! copying-info 0)
   (set-copying-rec-num-samples! copying-info (* frames-to-copy channels))
   copying-info)
+
+(define (make-copying-info/rec frames)
+  ;; do this allocation first: it's much bigger, and more likely to fail:
+  (define record-buffer (dll-malloc (frames->bytes frames)))
+  (define copying-info (cast (dll-malloc (ctype-sizeof _copying-rec))
+                             _pointer
+                             _copying-rec-pointer))
+  (set-copying-rec-sound! copying-info record-buffer)
+  (set-copying-rec-cur-sample! copying-info 0)
+  (set-copying-rec-num-samples! copying-info (* frames channels))
+  copying-info)
+
+;; pull the recorded sound out of a copying-rec structure.  This function
+;; does not guarantee that the sound has been completely recorded yet.
+(define (extract-recorded-sound copying-rec)
+  (define num-samples (copying-rec-num-samples copying-rec))
+  (define s16vec (make-s16vector num-samples))
+  (define dst-ptr (s16vector->cpointer s16vec))
+  (memcpy dst-ptr (copying-rec-sound copying-rec) (samples->bytes num-samples))
+  s16vec)
+
+;; ... how to make sure that it doesn't get freed before it's copied out?
 
 ;; STREAMING CALLBACK STRUCT
 
@@ -206,6 +236,12 @@
 (define copying-callback
   (cast
    (get-ffi-obj "copyingCallback" callbacks-lib _bogus-struct)
+   _bogus-struct-pointer
+   _pa-stream-callback))
+
+(define copying-callback/rec
+  (cast
+   (get-ffi-obj "copyingCallbackRec" callbacks-lib _bogus-struct)
    _bogus-struct-pointer
    _pa-stream-callback))
 
