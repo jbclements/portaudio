@@ -35,10 +35,12 @@
  [copying-info-free cpointer?]
  
  ;; make a sndplay record for playing a precomputed sound.
- [make-copying-info/rec (c-> s16vector? nat? (or/c false? nat?) cpointer?)]
+ [make-copying-info/rec (c-> nat? cpointer?)]
  ;; the raw pointer to the copying callback, for use with
  ;; a sndplay record:
  [copying-callback/rec cpointer?]
+ ;; produce an s16vector from the given copying-info
+ [extract-recorded-sound (c-> cpointer? s16vector?)]
  
  ;; make a streamplay record for playing a stream.
  [make-streaming-info (c-> integer? (list/c cpointer? cpointer?))]

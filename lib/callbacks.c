@@ -76,6 +76,42 @@ int copyingCallback(
   }
 }
 
+// simplest possible feeder; copy bytes until you run out.
+// assumes 16-bit ints, 2 channels.
+int copyingCallbackRec(
+    const void *input, void *output,
+    unsigned long frameCount,
+    const PaStreamCallbackTimeInfo* timeInfo,
+    PaStreamCallbackFlags statusFlags,
+    void *userData ) {
+
+  soundCopyingInfo *ri = (soundCopyingInfo *)userData;
+  short *copyBegin = ri->sound + ri->curSample;
+  unsigned long samplesToCopy = frameCount * CHANNELS;
+  unsigned long nextCurSample = ri->curSample + samplesToCopy;
+  // !@#$ windows makes me declare them at the top of the function:
+  size_t bytesToCopy;
+  char *zeroRegionBegin;
+  size_t bytesToZero;
+
+  if (ri->numSamples <= nextCurSample) {
+    // this is the last chunk.
+    bytesToCopy = SAMPLEBYTES * (ri->numSamples - ri->curSample);
+    memcpy((void *)copyBegin,input,bytesToCopy);
+    ri->curSample = ri->numSamples;
+
+    return(paComplete);
+
+  } else {
+    // this is not the last chunk. 
+    bytesToCopy = SAMPLEBYTES * samplesToCopy;
+    memcpy((void *)copyBegin,output,bytesToCopy);
+    ri->curSample = nextCurSample;
+    return(paContinue);
+  }
+}
+
+
 // copy buffers to the output buffer (if they're available)
 int streamingCallback(
     const void *input, void *output,
