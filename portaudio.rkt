@@ -1162,28 +1162,9 @@ typedef int PaStreamCallback(
 
 |#
 
-;; basically, using this is a bad idea.  The C callbacks 
-;; created using this type will wind up blocking on the 
-;; scheme thread, which can lead to deadlock if e.g.
-;; the scheme thread tries to destroy a stream while
-;; waiting.
-;;
-;; Instead, I'm using an explicit C callback that
-;; synchronizes loosely with racket code that fills
-;; buffers.
-#;(define _pa-stream-callback
-  (_fun #:atomic? #t
-        #:keep #t
-        #:async-apply (lambda (t) (t))
-        _pointer
-        _pointer
-        _ulong
-        _pa-stream-callback-time-info-pointer
-        _pa-stream-callback-flags
-        _pointer
-        -> _pa-stream-callback-result))
 ;;instead, just define it as an opaque pointer:
 (define-cpointer-type _pa-stream-callback)
+
 
 #|
 /** Opens a stream for either input, output or both.
