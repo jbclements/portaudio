@@ -6,6 +6,8 @@
          "portaudio.rkt"
          "callback-support.rkt")
 
+;; CODE IN PROGRESS! NOT CURRENTLY WORKING!
+
 ;; this module provides a function that records a sound.
 
 (define nat? exact-nonnegative-integer?)

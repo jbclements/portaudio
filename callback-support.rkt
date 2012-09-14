@@ -209,15 +209,12 @@
            (define frames-to-end 
              (bytes->frames (- buffer-bytes first-offset-to-write)))
            (filler (ptr-add buffer first-offset-to-write)
-                   frames-to-end
-                   first-frame-to-write)
+                   frames-to-end)
            (filler buffer
-                   (bytes->frames last-offset-to-write)
-                   (+ first-frame-to-write frames-to-end))]
+                   (bytes->frames last-offset-to-write))]
           [else
            (filler (ptr-add buffer first-offset-to-write)
-                   (- last-frame-to-write first-frame-to-write)
-                   first-frame-to-write)])
+                   (- last-frame-to-write first-frame-to-write))])
     ;; update the stream-rec
     (set-stream-rec-last-frame-written! stream-info last-frame-to-write)
     (set-stream-rec-last-offset-written! stream-info last-offset-to-write)))

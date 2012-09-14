@@ -12,8 +12,8 @@
 (define scribblings '(("portaudio.scrbl" () (tool))))
 (define categories '(media))
 (define version "2011-12-14-12:44")
-(define release-notes '((p "better heuristics for latency selection, "
-                           "more documentation")))
+(define release-notes '((p "stream buffer-fillers no longer accept an absolute "
+                           "frame number, just the number of frames requested.")))
 
 ;; planet-specific:
 (define repositories '("4.x"))

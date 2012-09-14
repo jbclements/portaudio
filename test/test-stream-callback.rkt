@@ -91,7 +91,8 @@
                  stream-info)
                 pa-continue)
   (check-equal? (stream-rec-last-frame-read stream-info) 7224)
-  (check-equal? (stream-rec-last-offset-read stream-info) (modulo (* 4 7224) buffer-bytes))
+  (check-equal? (stream-rec-last-offset-read stream-info) 
+                (modulo (* 4 7224) buffer-bytes))
   (check-equal? (stream-rec-fault-count stream-info) 1)
   (for ([i (in-range (* channels output-buffer-frames))])
     (check-equal? (s16vector-ref tgt i) 0))
@@ -105,7 +106,8 @@
                  stream-info)
                 pa-continue)
   (check-equal? (stream-rec-last-frame-read stream-info) 7448)
-  (check-equal? (stream-rec-last-offset-read stream-info) (modulo (* 4 7448) buffer-bytes))
+  (check-equal? (stream-rec-last-offset-read stream-info) 
+                (modulo (* 4 7448) buffer-bytes))
   (for ([i (in-range (* 2 output-buffer-frames))]
         [j (in-range (modulo (* 2 7224)
                              (* 2 2048))
@@ -127,7 +129,8 @@
                  stream-info)
                 pa-continue)
   (check-equal? (stream-rec-last-frame-read stream-info) 8224)
-  (check-equal? (stream-rec-last-offset-read stream-info) (modulo (* 4 8224) buffer-bytes))
+  (check-equal? (stream-rec-last-offset-read stream-info) (modulo (* 4 8224)
+                                                                  buffer-bytes))
   ;; end of buffer:
   (for ([i (in-range (* 2 192))]
         [j (in-range (modulo (* 2 8000)
@@ -150,53 +153,45 @@
   ;; tests for call-buffer-filler
   (let () (define ptr-log empty)
     (define ftw-log empty)
-    (define fs-log empty)
-    (define (bogus-buffer-filler cpointer frames-to-write frame-start)
+    (define (bogus-buffer-filler cpointer frames-to-write)
       (set! ptr-log (cons cpointer ptr-log))
-      (set! ftw-log (cons frames-to-write ftw-log))
-      (set! fs-log (cons frame-start fs-log)))
+      (set! ftw-log (cons frames-to-write ftw-log)))
     (set-stream-rec-last-frame-read! stream-info 1000)
     (set-stream-rec-last-offset-read! stream-info (modulo (* 4 1000) buffer-bytes))
     (set-stream-rec-last-frame-written! stream-info 1500)
-    (set-stream-rec-last-offset-written! stream-info (modulo (* 4 1500) buffer-bytes))
+    (set-stream-rec-last-offset-written! stream-info 
+                                         (modulo (* 4 1500) buffer-bytes))
     (call-buffer-filler stream-info bogus-buffer-filler)
     (check-equal? ptr-log (list (stream-rec-buffer stream-info)
                                 (ptr-add (stream-rec-buffer stream-info)
                                          (* 4 1500))))
     (check-equal? ftw-log (list 1000
-                                (- 2048 1500)))
-    (check-equal? fs-log (list 2048
-                               1500)))
+                                (- 2048 1500))))
   
   ;; check on 2nd iteration:
   (let () (define ptr-log empty)
     (define ftw-log empty)
-    (define fs-log empty)
-    (define (bogus-buffer-filler cpointer frames-to-write frame-start)
+    (define (bogus-buffer-filler cpointer frames-to-write)
       (set! ptr-log (cons cpointer ptr-log))
-      (set! ftw-log (cons frames-to-write ftw-log))
-      (set! fs-log (cons frame-start fs-log)))
+      (set! ftw-log (cons frames-to-write ftw-log)))
     (set-stream-rec-last-frame-read! stream-info 3048)
     (set-stream-rec-last-offset-read! stream-info (modulo (* 4 3048) buffer-bytes))
     (set-stream-rec-last-frame-written! stream-info 3548)
-    (set-stream-rec-last-offset-written! stream-info (modulo (* 4 3548) buffer-bytes))
+    (set-stream-rec-last-offset-written! stream-info 
+                                         (modulo (* 4 3548) buffer-bytes))
     (call-buffer-filler stream-info bogus-buffer-filler)
     (check-equal? ptr-log (list (stream-rec-buffer stream-info)
                                 (ptr-add (stream-rec-buffer stream-info)
                                          (* 4 1500))))
     (check-equal? ftw-log (list 1000
-                                (- 2048 1500)))
-    (check-equal? fs-log (list 4096
-                               3548)))
+                                (- 2048 1500))))
   
   ;; check for reader got ahead of writer:
   (let () (define ptr-log empty)
     (define ftw-log empty)
-    (define fs-log empty)
-    (define (bogus-buffer-filler cpointer frames-to-write frame-start)
+    (define (bogus-buffer-filler cpointer frames-to-write)
       (set! ptr-log (cons cpointer ptr-log))
-      (set! ftw-log (cons frames-to-write ftw-log))
-      (set! fs-log (cons frame-start fs-log)))
+      (set! ftw-log (cons frames-to-write ftw-log)))
     ;; 1K frames after the beginning of the tenth go-round:
     (define read-frame (+ 1000 (* 10 buffer-frames)))
     (set-stream-rec-last-frame-read! stream-info read-frame)
@@ -211,9 +206,7 @@
                                 (ptr-add (stream-rec-buffer stream-info)
                                          (* 4 1000))))
     (check-equal? ftw-log (list 1000
-                                (- buffer-frames 1000)))
-    (check-equal? fs-log (list (* 11 buffer-frames)
-                               (+ 1000 (* 10 buffer-frames)))))
+                                (- buffer-frames 1000))))
   
   )))
 

@@ -110,9 +110,8 @@ to call this for sounds that are really big (> 100MB?).
          (list/c (-> real?) (-> (list-of (list/c symbol? number?)))(-> void?))]{
  Given a buffer-filling callback and a buffer time (in seconds) and a sample
  rate, starts playing a stream that uses the given callback to supply data.
- The buffer-filler receives three arguments: a procedure that can be used
- to mutate the buffer, the length of the buffer in frames, and the frame-number
- to start at.
+ The buffer-filler receives two arguments: a procedure that can be used
+ to mutate the buffer, and the length of the buffer in frames.
  
  The function returns a list containing three functions: one that queries the
  stream for a time in seconds, one that returns statistics about the stream, 
@@ -130,36 +129,37 @@ to call this for sounds that are really big (> 100MB?).
 
 (require (planet clements/portaudio))
 
-(define (buffer-filler setter frames base-frames)
-  (define pitch 426)
-  (for ([i (in-range frames)]
-        [f (in-range base-frames (+ base-frames frames))])
-    (define sample 
-      (real->s16 (* 0.2 (sin (* tpisr f pitch)))))
-    (setter (* i 2) sample)
-    (setter (+ 1 (* i 2)) sample)))
-
+(define pitch 426)
+(define base-frames 0)
 (define sample-rate 44100.0)
 (define tpisr (* 2 pi (/ 1.0 sample-rate)))
 (define (real->s16 x)
   (inexact->exact (round (* 32767 x))))
 
+(define (buffer-filler setter frames) 
+  (for ([i (in-range frames)]
+        [f (in-range base-frames (+ base-frames frames))])
+    (define sample 
+      (real->s16 (* 0.2 (sin (* tpisr f pitch)))))
+    (setter (* i 2) sample)
+    (setter (+ 1 (* i 2)) sample))
+  (set! base-frames (+ base-frames frames)))
 
-(match-define (list timer stopper)
-              (stream-play buffer-filler 0.1 44100.0))
+(match-define (list timer stats stopper)
+              (stream-play buffer-filler 0.2 sample-rate))
 }|
 
-Note that this example uses a long buffer of 0.1 seconds (= 100 milliseconds) 
+Note that this example uses a long buffer of 0.2 seconds (= 200 milliseconds) 
 so that most GC pauses won't 
 interrupt it. 
 
-However, this a latency of 100ms is be pretty
+However, this a latency of 200ms is be pretty
 terrible for an interactive system. I usually use 50ms, and just
 put up with the occasional miss in return for lower latency.
 
  }
 
-@defproc[(stream-play/unsafe [buffer-filler (-> cpointer? int? int? void?)]
+@defproc[(stream-play/unsafe [buffer-filler (-> cpointer? int? void?)]
                       [buffer-time nonnegative-real?] 
                       [sample-rate nonnegative-real?])
          (list/c (-> real?) (-> void?))]{
@@ -212,7 +212,8 @@ speed. On the other hand, it means duplicating the entire sound (expensive,
 for large sounds), and it requires a platform that can support multiple streams
 simultaneously. (OS X, yes. Windows, usually no.) Also, it tends to have higher
 startup latency (especially on windows), because there's time required to start
-a new stream.
+a new stream. Finally, it requires pre-rendering of the entire sound, meaning
+that interactivity is out.
 
 The streaming interface solves these problems, but exposes more of the grotty
 stuff to the programmer.  Rather than providing sound data, the user provides 
@@ -224,7 +225,7 @@ specified independently of the underlying machine latency. The Portaudio
 engine calls the user's racket callback quite frequently--on the order of 
 every 1-5ms--to top up this ring buffer.  When GC pauses occur, the C
 callback will drink up everything left in the ring buffer, and then just 
-play silence.  
+play silence.
 
 Choosing the length of this ring buffer is therefore difficult: too short, and
 you'll hear frequent hiccoughs as the C callback runs out of data. Too long, and 
@@ -246,9 +247,6 @@ calling the callback, and closes the stream. Then, it calls the provided
 should probably wrap the pointer in a mutable object so that it can be severed
 on the Racket side when the stream is closed. Actually, that's true of the 
 stream, as well.
-
-
-
 
 
 [*] Different platforms are different; currently, this package insists on

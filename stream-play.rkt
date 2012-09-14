@@ -7,10 +7,15 @@
          "callback-support.rkt"
          (rename-in racket/contract [-> c->]))
 
+;; 2012-09-14 : changing interface to streams: frame is no longer going to be an argument.
+
 (define nat? exact-nonnegative-integer?)
 
+;; using this contract would kill runtimes:
 (define sample-setter/c (c-> nat? nat? void?))
-(define buffer-filler/c (c-> procedure? nat? nat? void?))
+(define buffer-filler/c (c-> procedure? ;; could be sample-setter/c
+                             nat? void?))
+;; leaving this one out, too, to save runtime. might not be worth it:
 (define buffer-filler/unsafe/c (c-> cpointer? nat? nat? void?))
 (define time-checker/c (c-> number?))
 (define sound-killer/c (c-> void?))
@@ -22,7 +27,8 @@
                                 stats/c
                                 sound-killer/c))]
                   [stream-play/unsafe 
-                   (c-> procedure? real? real? 
+                   (c-> procedure? ;; could be buffer-filler/unsafe/c
+                        real? real? 
                         (list/c time-checker/c
                                 stats/c
                                 sound-killer/c))])
@@ -34,7 +40,7 @@
 ;; the wake interval for the buffer-filler:
 (define sleep-interval 0.01)
 
-;; given a buffer-filler and a frame length and a sample rate,
+;; given a buffer-filler (unsafe) and a frame length and a sample rate,
 ;; starts a stream, using the buffer-filler to provide data as
 ;; needed.
 (define (stream-play/unsafe buffer-filler buffer-time sample-rate)
@@ -89,13 +95,12 @@
       (error 'check-sample-idx 
              (format "must have 0<=sample-index<~s, given ~s"
                      buffer-samples sample-idx))))
-  (define (call-safe-buffer-filler ptr frames idx)
+  (define (call-safe-buffer-filler ptr frames)
     (safe-buffer-filler (lambda (sample-idx sample)
                           (check-sample-idx sample-idx)
                           ;; this should check that sample is legal....
                           (ptr-set! ptr _sint16 sample-idx sample))
-                        frames
-                        idx))
+                        frames))
   (stream-play/unsafe call-safe-buffer-filler buffer-time sample-rate))
 
 ;; compute the number of frames in the buffer from the given time

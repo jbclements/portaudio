@@ -13,6 +13,12 @@
 
 (define time-checker #f)
 
+(define (three-arg->two-arg fun init)
+  (define frames init)
+  (lambda (a num-frames)
+    (begin0 (fun a num-frames frames)
+            (set! frames (+ frames num-frames)))))
+
 ;; sine wave at 403 Hz
 (define (buffer-filler sample-setter len base-frames)
   (define pre-time (and time-checker (time-checker)))
@@ -34,7 +40,7 @@
 (collect-garbage)
 (collect-garbage)
 (match-define (list checker stats stopper)
-  (stream-play buffer-filler 0.05 44100))
+  (stream-play (three-arg->two-arg buffer-filler 0) 0.05 44100))
 (set! time-checker checker)
 
 
@@ -65,7 +71,7 @@
 (printf "1/2 second at 403 Hz, 25ms buffer length.\n")
 
 (match-define (list checker2 stats2 stopper2)
-  (stream-play/unsafe buffer-filler/unsafe 0.025 44100))
+  (stream-play/unsafe (three-arg->two-arg buffer-filler/unsafe 0) 0.025 44100))
 (set! time-checker checker2)
 (sleep 0.5)
 (stats2)
