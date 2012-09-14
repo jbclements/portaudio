@@ -12,6 +12,9 @@
 (define win-dll-path (build-path lib-path (system-library-subpath) "portaudio"))
 (define mac-dll-path (build-path lib-path "libportaudio"))
 
+(define linux-err-msg
+  "Note: on Linux, you need to install the libportaudio library yourself. Underlying error message: ~a")
+
 (define libportaudio
   (case (system-type)
     [(windows) (ffi-lib win-dll-path)]
@@ -24,9 +27,6 @@
                                linux-err-msg
                               (exn-message exn)))])
                  (ffi-lib "libportaudio" '("2.0.0" "")))]))
-
-(define linux-err-msg
-  "Note: on Linux, you need to install the libportaudio library yourself. Underlying error message: ~a")
 
 ;; wrap a function to signal an error when an error code is returned.
 ;; (any ... -> pa-error) -> (any ... -> )
