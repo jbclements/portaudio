@@ -7,7 +7,8 @@
          "callback-support.rkt"
          (rename-in racket/contract [-> c->]))
 
-;; 2012-09-14 : changing interface to streams: frame is no longer going to be an argument.
+
+;; this file contains the code required to play streams
 
 (define nat? exact-nonnegative-integer?)
 
@@ -125,7 +126,7 @@
     (cond [(member default-device reasonable-devices) default-device]
           [else (fprintf 
                  (current-error-port)
-                 "default output device doesn't support low-latency (~sms) output, using device ~s instead"
+                 "default output device doesn't support low-latency (~sms) output, using device ~s instead\n"
                  (* 1000 reasonable-latency)
                  (device-name (car reasonable-devices)))
                 (car reasonable-devices)]))
