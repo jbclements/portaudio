@@ -8,7 +8,8 @@
          "devices.rkt"
          (rename-in racket/contract [-> c->]))
 
-;; 2012-09-14 : changing interface to streams: frame is no longer going to be an argument.
+
+;; this file contains the code required to play streams
 
 (define nat? exact-nonnegative-integer?)
 

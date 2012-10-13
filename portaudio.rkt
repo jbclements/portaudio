@@ -520,7 +520,6 @@ const PaHostApiInfo * Pa_GetHostApiInfo( PaHostApiIndex hostApi );
                libportaudio
                (_fun _pa-host-api-index -> _pa-host-api-info-pointer)))
 
-
 #|
 
 
@@ -1805,6 +1804,14 @@ void Pa_Sleep( long msec );
 (define terminate-absurd-threshold 1000000)
 
 ;; UTILITIES
+
+
+;; enumerate the symbols associated with the supported APIs
+(define (pa-get-all-api-ids)
+  (for/list ([i (in-range (pa-get-host-api-count))])
+    (pa-host-api-info-type (pa-get-host-api-info i))))
+
+
 
 (define (stream-stats stream)
   (define stream-info (pa-get-stream-info stream))
