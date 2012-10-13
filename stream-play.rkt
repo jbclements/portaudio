@@ -5,6 +5,7 @@
          ffi/unsafe
          "portaudio.rkt"
          "callback-support.rkt"
+         "devices.rkt"
          (rename-in racket/contract [-> c->]))
 
 ;; 2012-09-14 : changing interface to streams: frame is no longer going to be an argument.
@@ -45,7 +46,7 @@
 ;; needed.
 (define (stream-play/unsafe buffer-filler buffer-time sample-rate)
   (pa-maybe-initialize)
-  (define chosen-device (device-choose))
+  (define chosen-device (find-output-device reasonable-latency))
   (log-debug (format "Portaudio: chosen number/name: ~s,~s"
                      chosen-device
                      (device-name chosen-device)))
@@ -111,26 +112,6 @@
   (inexact->exact 
    (ceiling (* buffer-time sample-rate))))
 
-
-;; device-choose : -> natural?
-;; return the device number of an output device with two channels
-;; and reasonable latency.
-(define (device-choose)
-  (define reasonable-devices (low-latency-output-devices reasonable-latency))
-  (when (null? reasonable-devices)
-    (error 'stream-choose "no devices available with ~sms latency or less."
-           (* 1000 reasonable-latency)))
-  (define default-device (pa-get-default-output-device))
-  (define selected-device 
-    (cond [(member default-device reasonable-devices) default-device]
-          [else (fprintf 
-                 (current-error-port)
-                 "default output device doesn't support low-latency (~sms) output, using device ~s instead"
-                 (* 1000 reasonable-latency)
-                 (device-name (car reasonable-devices)))
-                (car reasonable-devices)]))
-  selected-device)
-
 ;; stream-open : stream-info natural? real? real? -> stream
 ;; open the given device using the given stream-info, latency, and sample-rate.
 (define (stream-open stream-info device-number latency sample-rate)
@@ -142,14 +123,19 @@
      '(paInt16)    ;; sample format
      latency       ;; latency
      #f))            ;; host-specific info
-  (pa-open-stream
-   #f ;; input parameters
-   output-stream-parameters
-   sr/i
-   0 ;; frames-per-buffer
-   '() ;; stream-flags
-   streaming-callback
-   stream-info))
+  (with-handlers ([(lambda (exn) 
+                     (string=? (exn-message exn)
+                               "pa-open-stream: invalid device"))
+                   (lambda (exn)
+                     (error "open-stream failed with error message: ~s. See documentation for possible fixes."))])
+    (pa-open-stream
+     #f ;; input parameters
+     output-stream-parameters
+     sr/i
+     0 ;; frames-per-buffer
+     '() ;; stream-flags
+     streaming-callback
+     stream-info)))
 
 (define (round-to-hundredth x)
   (/ (round (* x 100)) 100))

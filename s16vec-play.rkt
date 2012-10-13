@@ -4,7 +4,8 @@
          ffi/unsafe
          (rename-in racket/contract [-> c->])
          "portaudio.rkt"
-         "callback-support.rkt")
+         "callback-support.rkt"
+         "devices.rkt")
 
 ;; this module provides a function that plays a sound.
 
@@ -18,6 +19,7 @@
 ;; a new place.
 
 (define channels 2)
+(define reasonable-latency 0.1)
 
 ;; given an s16vec, a starting frame, a stopping frame or 
 ;; false, and a sample rate, play the sound.
@@ -30,15 +32,29 @@
   (pa-maybe-initialize)
   (define copying-info (make-copying-info s16vec start-frame stop-frame))
   (define sr/i (exact->inexact sample-rate))
+  (define device-number (find-output-device reasonable-latency))
+  (define device-latency (device-low-output-latency device-number))
+  (define output-stream-parameters
+    (make-pa-stream-parameters
+     device-number ;; device
+     2             ;; channels
+     '(paInt16)    ;; sample format
+     device-latency ;; latency
+     #f))            ;; host-specific info
   (define stream
-    (pa-open-default-stream
-     0             ;; input channels
-     2             ;; output channels
-     'paInt16      ;; sample format
-     sr/i          ;; sample rate
-     0             ;;frames-per-buffer
-     copying-callback ;; callback (NULL means just wait for data)
-     copying-info))
+    (with-handlers ([(lambda (exn) 
+                       (string=? (exn-message exn)
+                                 "pa-open-stream: invalid device"))
+                     (lambda (exn)
+                       (error "open-stream failed with error message: ~s. See documentation for possible fixes."))])
+      (pa-open-stream
+       #f            ;; input parameters
+       output-stream-parameters
+       sr/i
+       0             ;; frames-per-buffer
+       '()           ;; stream-flags
+       copying-callback
+       copying-info)))
   (pa-set-stream-finished-callback stream copying-info-free)
   (pa-start-stream stream)
   (define (stopper)

@@ -520,10 +520,7 @@ const PaHostApiInfo * Pa_GetHostApiInfo( PaHostApiIndex hostApi );
                libportaudio
                (_fun _pa-host-api-index -> _pa-host-api-info-pointer)))
 
-;; enumerate the symbols associated with the supported APIs
-(define (pa-get-all-api-ids)
-  (for/list ([i (in-range (pa-get-host-api-count))])
-    (pa-host-api-info-type (pa-get-host-api-info i))))
+
 #|
 
 
@@ -1832,28 +1829,4 @@ void Pa_Sleep( long msec );
   (pa-device-info-name (pa-get-device-info i)))
 
 
-;; reasonable-latency-output-devices : real -> (list-of natural?)
-;; output devices with reasonable latency
-(define (low-latency-output-devices latency)
-  (for/list ([i (in-range (pa-get-device-count))]
-        #:when (has-outputs? i)
-        #:when (reasonable-latency? latency i))
-    i))
-
-;; has-outputs? : natural -> boolean
-;; return true if the device has at least
-;; two output channels
-(define (has-outputs? i)
-  (<= 2 (pa-device-info-max-output-channels (pa-get-device-info i))))
-
-;; reasonable-latency? : natural real -> boolean
-;; return true when the device has low latency
-;; no greater than some threshold
-(define (reasonable-latency? latency i)
-  (<= (device-low-output-latency i) latency))
-
-;; device-low-output-latency : natural -> real
-;; return the low output latency of a device 
-(define (device-low-output-latency i)
-  (pa-device-info-default-low-output-latency (pa-get-device-info i)))
 
