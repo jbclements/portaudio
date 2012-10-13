@@ -54,6 +54,50 @@
 
  Cheers!}
 
+@section{Using Windows, Choosing Host APIs}
+
+Using Portaudio on Windows raises a few extra challenges.  In 
+particular, Windows machines generally support a number of different
+"Host API"s that Portaudio can use to interact with the machine.
+In addition, these Host APIs may also target multiple different
+devices. 
+
+The default Host API for windows is MME. My observations suggest
+that this API is limited; it can open only a small number of 
+simultaneous streams, and the latency for playing sounds is extremely
+high. 
+
+The WASAPI API (if that's not redundant) has its own issues; in 
+particular, it seems to be necessary to manually set the playback device
+to the right sample rate (for rsound, typically 44100Hz) before 
+starting DrRacket.  Failing to do so simply results in an "invalid
+device" error from Portaudio.
+
+To address these issues, Portaudio 
+includes a number of functions used to control the selection
+of the host API. Using these functions should not be necessary on
+Mac OS X.
+
+@defproc[(default-host-api) symbol?]{
+ Returns the default API for the platform.}
+
+@defproc[(all-host-apis) (listof symbol?)]{
+ Returns a list of the APIs supported by the platform.}
+
+@defproc[(host-api )]
+
+(provide (contract-out 
+          [default-host-api (->  symbol?)]
+          [all-host-apis (-> (listof symbol?))]
+          [host-api (parameter/c (or/c false? symbol?))]
+          [find-output-device (-> number? nat?)]
+          [device-low-output-latency (-> nat? number?)]))
+
+
+
+In order to give some control over the selection of the host API,
+a number of functions 
+
 @section{Playing Sounds}
 
 The first high-level interface involves copying the entire sound
