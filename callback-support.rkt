@@ -38,7 +38,8 @@
  [make-copying-info/rec (c-> nat? cpointer?)]
  ;; the raw pointer to the copying callback, for use with
  ;; a sndplay record:
- [copying-callback/rec cpointer?]
+ ;; NOT IMPLEMENTED YET
+ #;[copying-callback/rec cpointer?]
  ;; produce an s16vector from the given copying-info
  [extract-recorded-sound (c-> cpointer? s16vector?)]
  
@@ -238,7 +239,8 @@
    _bogus-struct-pointer
    _pa-stream-callback))
 
-(define copying-callback/rec
+;; the callback for recording sounds (not working yet....)
+#;(define copying-callback/rec
   (cast
    (get-ffi-obj "copyingCallbackRec" callbacks-lib _bogus-struct)
    _bogus-struct-pointer
