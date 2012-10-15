@@ -84,19 +84,17 @@ Mac OS X.
 @defproc[(all-host-apis) (listof symbol?)]{
  Returns a list of the APIs supported by the platform.}
 
-@defproc[(host-api )]
+@defparam[host-api api (or/c false? symbol?)]{
+ Controls the choice of API made when opening a stream (including calls
+ to s16vec-play and stream-play).}
 
-(provide (contract-out 
-          [default-host-api (->  symbol?)]
-          [all-host-apis (-> (listof symbol?))]
-          [host-api (parameter/c (or/c false? symbol?))]
-          [find-output-device (-> number? nat?)]
-          [device-low-output-latency (-> nat? number?)]))
+@defproc[(find-output-device [desired-latency number?]) exact-nonnegative-integer?]{
+   Given a latency, finds a device number that uses the current API and has the
+   desired latency and two output channels.}
 
-
-
-In order to give some control over the selection of the host API,
-a number of functions 
+@defproc[(device-low-output-latency [device-number exact-nonnegative-integer?])
+          number?]{
+ Given a device number, return the "low output latency" associated with that device.}
 
 @section{Playing Sounds}
 

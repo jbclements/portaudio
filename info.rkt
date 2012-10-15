@@ -14,6 +14,7 @@
 (define version "2012-10-13-12:44")
 (define release-notes '((p "improved windows host api handling, "
                            "bugfixes")))
+(define compile-omit-paths '("test"))
 
 ;; planet-specific:
 (define repositories '("4.x"))
