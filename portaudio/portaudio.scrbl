@@ -1,7 +1,6 @@
 #lang scribble/doc
 
-@(require scribble/manual
-          planet/scribble)
+@(require scribble/manual)
 
 @title{@bold{Portaudio}: Bindings for the Portaudio portable sound library}
 
@@ -9,7 +8,7 @@
 
 @(require (for-label racket))
 
-@defmodule/this-package[main]{This collection provides 
+@defmodule[portaudio]{This collection provides 
  bindings to the cross-platform ``Portaudio'' library, capable of playing 
  sound on Windows, OS X, and Linux. 
  
@@ -124,7 +123,7 @@ to call this for sounds that are really big (> 100MB?).
 @codeblock|{
 #lang racket
 
-(require (planet clements/portaudio)
+(require portaudio
          ffi/vector)
 
 (define pitch 426)
@@ -169,7 +168,7 @@ to call this for sounds that are really big (> 100MB?).
 @codeblock|{
 #lang racket
 
-(require (planet clements/portaudio))
+(require portaudio)
 
 (define pitch 426)
 (define base-frames 0)
