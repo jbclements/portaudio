@@ -1,8 +1,15 @@
-#lang racket
+#lang racket/base
+
+;; this file provides an FFI wrapper around the existing portaudio
+;; API.  It does not attempt to guarantee safety, and it's definitely
+;; possible to crash DrRacket by calling these functions improperly.
+;; there are a few utility functions at the bottom that are used in
+;; order to manage things a bit.
 
 (require ffi/unsafe
          racket/runtime-path
-         (for-syntax syntax/parse)
+         racket/match
+         (for-syntax racket/base syntax/parse)
          (only-in '#%foreign ffi-callback))
 
 (provide (all-defined-out))

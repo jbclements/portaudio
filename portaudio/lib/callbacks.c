@@ -3,6 +3,25 @@
 #include <string.h>
 #include "portaudio.h"
 
+// This file provides callbacks suitable for passing to
+// portaudio that can respond to portaudio requests for
+// data. There are three callbacks, the copyingCallback,
+// the only-partially-implemented copyingCallbackRec,
+// and the streamingCallback.  The first one is for
+// playing sounds that are completely pre-rendered
+// in a buffer, and the third is for playing sounds
+// that are being generated on the fly. The difference
+// between the two is that the streaming one has mutable fields
+// in its struct that allow two-way communication between
+// C and Racket, and that it knows how to loop around to
+// the beginning of the buffer again after it reaches the end.
+
+// Implementation note: Portaudio is very specific that these
+// callbacks definitely can't block; this is why we need
+// a double-callback architecture in the case of streaming
+// output; the low-level callback never blocks, and the higher-level
+// callback is written in Racket (and might block).
+
 typedef struct soundCopyingInfo{
   // this sound is assumed to be malloc'ed, and gets freed when finished.
   short *sound;
@@ -14,6 +33,7 @@ typedef struct soundStreamInfo{
   unsigned int   bufferFrames;
   char *buffer;
 
+  // only mutated by C (er... I believe?)
   unsigned int lastFrameRead;
   unsigned int lastOffsetRead;
 
@@ -76,6 +96,7 @@ int copyingCallback(
   }
 }
 
+// EXPERIMENTAL, NOT COMPLETELY IMPLEMENTED YET:
 // simplest possible feeder; copy bytes until you run out.
 // assumes 16-bit ints, 2 channels.
 int copyingCallbackRec(
@@ -151,7 +172,7 @@ int streamingCallback(
   // if it wasn't available.
   ssi->lastFrameRead = lastFrameRequested;
   ssi->lastOffsetRead = (ssi->lastOffsetRead + FRAMES_TO_BYTES(frameCount)) % bufferBytes;
-  
+
   return(paContinue);
 
 }
@@ -168,6 +189,9 @@ void freeStreamingInfo(soundStreamInfo *ssi){
 
   free(ssi->buffer);
   // when all_done is 1, this triggers self-destruct:
+  // note that we're not mutating the structure here,
+  // but rather a cell that it points to, so it will
+  // survine the free(ssi).
   *(ssi->all_done) = 1;
   free(ssi);
 }

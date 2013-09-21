@@ -1,11 +1,12 @@
-#lang racket
+#lang racket/base
 
 (require ffi/vector
          ffi/unsafe
          (rename-in racket/contract [-> c->])
          "portaudio.rkt"
          "callback-support.rkt"
-         "devices.rkt")
+         "devices.rkt"
+         racket/bool)
 
 ;; this module provides a function that plays a sound.
 

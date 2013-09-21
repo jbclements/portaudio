@@ -15,8 +15,50 @@
 ;; the racket-specific C callback code, and provides functions
 ;; to interact with and manage those callbacks.
 
-;; the tricky thing is managing the resources that are shared
+;; one of the tricky things is managing the resources that are shared
 ;; between C and Racket.
+
+;; there are two sets of functions here; one for use in playing
+;; a single sound from an existing buffer, and one for use in 
+;; playing streaming audio. The nice thing about single sounds
+;; is that they keep playing even through GC pauses. The bad thing
+;; about single sounds is that you have to have them in memory 
+;; before playing them, and you can't synchronize them accurately
+;; (e.g., play one after the other so they sound seamless).
+
+(provide
+ (contract-out
+  ;; make a sndplay record for playing a precomputed sound.
+  [make-copying-info (c-> s16vector? nat? (or/c false? nat?) cpointer?)]
+  ;; the raw pointer to the copying callback, for use with
+  ;; a sndplay record:
+  [copying-callback cpointer?]
+  ;; the free function for a copying callback
+  [copying-info-free cpointer?]
+  
+  ;; make a sndplay record for recording a precomputed sound.
+  [make-copying-info/rec (c-> nat? cpointer?)]
+  ;; the raw pointer to the copying callback, for use with
+  ;; a sndplay record:
+  ;; NOT IMPLEMENTED YET
+  #;[copying-callback/rec cpointer?]
+  ;; produce an s16vector from the given copying-info
+  [extract-recorded-sound (c-> cpointer? s16vector?)]
+  
+  ;; make a streamplay record for playing a stream.
+  [make-streaming-info (c-> integer? (list/c cpointer? cpointer?))]
+  ;; is the stream all done?
+  [all-done? (c-> cpointer? boolean?)]
+  ;; call the given procedure with the buffers to be filled:
+  [call-buffer-filler (c-> cpointer? procedure? any)]
+  ;; the raw pointer to the streaming callback, for use with a
+  ;; streamplay record:
+  [streaming-callback cpointer?]
+  ;; how many times has a given stream failed (i.e. not had a 
+  ;; buffer provided in time by racket)?
+  [stream-fails (c-> cpointer? integer?)]
+  ;; the free function for a streaming callback
+  [streaming-info-free cpointer?]))
 
 (define (frames? n)
   (and (exact-integer? n)
@@ -24,39 +66,6 @@
 
 (define nat? exact-nonnegative-integer?)
 (define false? not)
-
-(provide/contract 
- ;; make a sndplay record for playing a precomputed sound.
- [make-copying-info (c-> s16vector? nat? (or/c false? nat?) cpointer?)]
- ;; the raw pointer to the copying callback, for use with
- ;; a sndplay record:
- [copying-callback cpointer?]
- ;; the free function for a copying callback
- [copying-info-free cpointer?]
- 
- ;; make a sndplay record for playing a precomputed sound.
- [make-copying-info/rec (c-> nat? cpointer?)]
- ;; the raw pointer to the copying callback, for use with
- ;; a sndplay record:
- ;; NOT IMPLEMENTED YET
- #;[copying-callback/rec cpointer?]
- ;; produce an s16vector from the given copying-info
- [extract-recorded-sound (c-> cpointer? s16vector?)]
- 
- ;; make a streamplay record for playing a stream.
- [make-streaming-info (c-> integer? (list/c cpointer? cpointer?))]
- ;; is the stream all done?
- [all-done? (c-> cpointer? boolean?)]
- ;; call the given procedure with the buffers to be filled:
- [call-buffer-filler (c-> cpointer? procedure? any)]
- ;; the raw pointer to the streaming callback, for use with a
- ;; streamplay record:
- [streaming-callback cpointer?]
- ;; how many times has a given stream failed (i.e. not had a 
- ;; buffer provided in time by racket)?
- [stream-fails (c-> cpointer? integer?)]
- ;; the free function for a streaming callback
- [streaming-info-free cpointer?])
 
 ;; providing these for test cases only:
 (provide stream-rec-buffer
@@ -144,7 +153,7 @@
    ;; a pointer to a 4-byte cell; when it's nonzero,
    ;; the supplying procedure should shut down, and
    ;; free this cell. If it doesn't get freed, well,
-   ;; that's four bytes wasted forever.
+   ;; that's four bytes wasted until the next store-prompt.
    [all-done _pointer]))
 
 
@@ -173,8 +182,9 @@
   (list info all-done-cell))
 
 ;; given an all-done? cell, check whether it's nonzero.
-;; don't call this with the stream-rec pointer, it will
-;; immediately signal true.
+;; be careful to call this with an all-done? cell, and not
+;; just the stream-rec pointer that points to it, or you'll
+;; get an immediate true.
 (define (all-done? all-done-ptr)
   (not (= (ptr-ref all-done-ptr _uint32) 0)))
 

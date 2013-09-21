@@ -1,4 +1,4 @@
-#lang racket
+#lang racket/base
 
 (require ffi/vector
          ffi/unsafe

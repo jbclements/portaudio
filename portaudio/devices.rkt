@@ -1,8 +1,10 @@
-#lang racket
+#lang racket/base
 
 ;; manage devices and the selection thereof across platforms
 
-(require "portaudio.rkt")
+(require "portaudio.rkt"
+         racket/bool
+         racket/contract)
 
 (provide (contract-out 
           [default-host-api (->  symbol?)]
@@ -13,7 +15,6 @@
 
 (define nat? exact-nonnegative-integer?)
 
-
 ;; default-host-api : 
 ;; return the symbol associated with the host API
 (define (default-host-api)
@@ -22,8 +23,8 @@
 
 ;; all-host-apis : return the symbols associated with supported host APIs
 ;; enumerate the symbols associated with the supported APIs
-;; this list is in order of the API indexes, so you can do a reverse
-;; lookup on this list to get host api indexes.
+;; this list is in order of the API indexes, so, for instance, if element
+;; 3 of the list is 'foo, then API 'foo has index 3.
 (define (all-host-apis)
   (for/list ([i (in-range (pa-get-host-api-count))])
     (pa-host-api-info-type (pa-get-host-api-info i))))
@@ -60,12 +61,12 @@
   (cond [(member default-output-device reasonable-devices) 
          default-output-device]
         [else 
-         (log-info 
-          (format 
+         ;; arbitrarily choose the first...
+         (log-warning 
+          (format
            "default output device doesn't support low-latency (~sms) output, using device ~s instead"
            (* 1000 latency)
            (device-name (car reasonable-devices))))
-         ;; arbitrarily choose the first...
          (car reasonable-devices)]))
 
 
@@ -77,8 +78,6 @@
            [this-host-api (all-host-apis)]
            #:when (symbol=? host-api this-host-api))
     i))
-
-
 
 ;; reasonable-latency-output-devices : real -> (list-of natural?)
 ;; output devices with reasonable latency
