@@ -2,7 +2,7 @@
 
 @(require scribble/manual)
 
-@title{@bold{Portaudio}: Bindings for the Portaudio portable sound library}
+@title{Portaudio: Bindings for the Portaudio portable sound library}
 
 @author[(author+email "John Clements" "clements@racket-lang.org")]
 
