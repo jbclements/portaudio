@@ -12,6 +12,8 @@
           [host-api (parameter/c (or/c false? symbol?))]
           [find-output-device (-> number? nat?)]
           [device-low-output-latency (-> nat? number?)]))
+;; can't put contract on it, or can't use in teaching languages:
+(provide set-host-api!)
 
 (define nat? exact-nonnegative-integer?)
 
@@ -43,6 +45,11 @@
                                   0 new-val)]
            [else new-val]))))
 
+;; set-host-api! : a version of the parameter setter that you can use
+;; in a beginner language
+(define (set-host-api! host-api-str)
+  (host-api (string->symbol host-api-str))
+  (symbol->string (host-api)))
 
 ;; find-output-device : number -> number
 ;; return a device from the current host api with the given latency, using
