@@ -51,9 +51,10 @@
   
   (printf "pa-version-text: ~s" (pa-get-version-text))
   (printf "devices available: ~s\n" (pa-get-device-count))
+  (printf "info on available devices: ~s\n" (available-devices-info))
+  (printf "default device: ~s\n" (default-device-info))
   
 
-  
   ;; the remainder of these require 2-channel output
   
   (pa-maybe-initialize)
@@ -93,7 +94,8 @@
     (pa-start-stream stream)
     (check-equal? (pa-stream-stopped? stream) #f)
     (check-equal? (pa-stream-active? stream) #t)
-    (check-true (not (= 0.0 (pa-get-stream-time stream))))
+    (sleep 0.5)
+    (check-not-exn (lambda () (pa-get-stream-time stream)))
     (sleep 0.5)
     (test-end)
     (check-equal? (pa-stream-active? stream) #f))
@@ -223,5 +225,3 @@
   
 
   )))
-
-
