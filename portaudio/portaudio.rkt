@@ -1361,8 +1361,6 @@ PaError Pa_OpenDefaultStream( PaStream** stream,
 PaError Pa_CloseStream( PaStream *stream );
 |#
 (define (pa-close-stream stream)
-  ;; unregister with the custodian
-  (remove-managed stream)
   (pa-close-stream/raw stream))
 
 (define-checked pa-close-stream/raw
@@ -1435,11 +1433,10 @@ PaError Pa_StartStream( PaStream *stream );
 */
 PaError Pa_StopStream( PaStream *stream );
 |#
-(define (pa-stop-stream stream)
-  (remove-managed stream)
-  (pa-stop-stream/raw stream))
-
-(define-checked pa-stop-stream/raw
+;; this changes the stream to "stopped" state, but 
+;; does not do the job of CloseStream--that is, freeing
+;; the resources associated with the stream.
+(define-checked pa-stop-stream
   (get-ffi-obj "Pa_StopStream"
                libportaudio
                (_fun _pa-stream-pointer -> _pa-error)))
@@ -1451,12 +1448,10 @@ PaError Pa_StopStream( PaStream *stream );
 */
 PaError Pa_AbortStream( PaStream *stream );
 |#
-
-(define (pa-abort-stream stream)
-  (remove-managed stream)
-  (pa-abort-stream/raw stream))
-
-(define-checked pa-abort-stream/raw
+;; this changes the stream to "stopped" state and dumps 
+;; remaining samples, but does not do the job of CloseStream--
+;; that is, freeing the resources associated with the stream.
+(define-checked pa-abort-stream
   (get-ffi-obj "Pa_AbortStream"
                libportaudio
                (_fun _pa-stream-pointer -> _pa-error)))
