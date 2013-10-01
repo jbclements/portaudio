@@ -1360,6 +1360,15 @@ PaError Pa_OpenDefaultStream( PaStream** stream,
 */
 PaError Pa_CloseStream( PaStream *stream );
 |#
+
+;; AAGH! No one is ever calling pa-close-stream! Plan for fixing this:
+;; streams will be wrapped in a structure containing a semaphore.
+;; A thread will be waiting on this semaphore, to call Pa_CloseStream.
+;; The streamFinishedCallback will post to this semaphore.
+;; NOTE: this prevents you from re-opening stopped streams, if I 
+;; understand the behavior of StreamFinishedCallback correctly.
+;; POSSIBLE PROBLEM: does the StreamFinishedCallback always happen?
+
 (define (pa-close-stream stream)
   (pa-close-stream/raw stream))
 
