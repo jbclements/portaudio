@@ -78,6 +78,15 @@
        #`(define name
            (pa-semi-checked binding name-as-symbol)))]))
 
+;; a convenience abstraction for functions that accept streams
+(define-syntax (define-stream-fun stx)
+  (syntax-parse stx
+    [(_ name1:id name2:id)
+     (with-syntax ([name-as-symbol #`(#%datum . #,(syntax-e #'name1))])
+       #`(define (name1 stream)
+           (unless (stream? stream)
+             (raise-argument-error name-as-symbol "stream" 0 stream))
+           (name2 stream)))]))
 
 ;; DEBUGGING TIME
 (define open-stream-channel (make-channel))
@@ -90,6 +99,12 @@
        ['open (set-box! stream-opens (add1 (unbox stream-opens)))]
        ['close (set-box! stream-closes (add1 (unbox stream-closes)))])
      (loop))))
+
+;; every stream is associated with a semaphore, which ensures that CloseStream
+;; only gets called once on a stream.
+(struct stream (ptr sema))
+(define (make-stream ptr)
+  (stream ptr (make-semaphore 1)))
 
 ;; headers taken from release of portaudio.h
 
@@ -1290,7 +1305,8 @@ PaError Pa_OpenStream( PaStream** stream,
                      -> (match err
                           ['paNoError
                            (begin (channel-put open-stream-channel 'open)
-                                  (add-managed result 
+                                  (define wrapped-result (make-stream result))
+                                  (add-managed wrapped-result
                                                close-stream-callback)
                                   result)]
                           [other (error 'pa-open-stream "~a" 
@@ -1352,7 +1368,8 @@ PaError Pa_OpenDefaultStream( PaStream** stream,
                      -> (match err
                           ['paNoError  
                            (begin (channel-put open-stream-channel 'open)
-                                  (add-managed result 
+                                  (define wrapped-result (make-stream result))
+                                  (add-managed wrapped-result
                                                close-stream-callback)
                                   result)]
                           [other (error 'pa-open-default-stream "~a" 
@@ -1361,7 +1378,8 @@ PaError Pa_OpenDefaultStream( PaStream** stream,
 
 (define close-stream-callback
   (ffi-callback (lambda (p _)
-                  (pa-maybe-stop-stream p))
+                  (fprintf (current-error-port) "AARROOOGAH! ARROOOOGAH!\n")
+                  (pa-close-stream p))
                 (list _racket _pointer)
                 _void))
 
@@ -1374,17 +1392,15 @@ PaError Pa_OpenDefaultStream( PaStream** stream,
 PaError Pa_CloseStream( PaStream *stream );
 |#
 
-;; AAGH! No one is ever calling pa-close-stream! Plan for fixing this:
-;; streams will be wrapped in a structure containing a semaphore.
-;; A thread will be waiting on this semaphore, to call Pa_CloseStream.
-;; The streamFinishedCallback will post to this semaphore.
-;; NOTE: this prevents you from re-opening stopped streams, if I 
-;; understand the behavior of StreamFinishedCallback correctly.
-;; POSSIBLE PROBLEM: does the StreamFinishedCallback always happen?
-
+;; takes a (wrapped) stream, closes it
+;; unless it's already been closed
 (define (pa-close-stream stream)
-  (channel-put open-stream-channel 'close)
-  (pa-close-stream/raw stream))
+  (unless (stream? stream)
+    (raise-argument-error 'pa-close-stream "stream" 0 stream))
+  (when (semaphore-try-wait? (stream-sema stream))
+    (channel-put open-stream-channel 'close)
+    (pa-close-stream/raw (stream-ptr stream))
+    (pa-close-stream (stream-ptr stream))))
 
 (define-checked pa-close-stream/raw
   (get-ffi-obj "Pa_CloseStream"
@@ -1434,7 +1450,12 @@ typedef void PaStreamFinishedCallback( void *userData );
 */
 PaError Pa_SetStreamFinishedCallback( PaStream *stream, PaStreamFinishedCallback* streamFinishedCallback ); 
 |#
-(define-checked pa-set-stream-finished-callback
+(define (pa-set-stream-finished-callback stream)
+  (unless (stream? stream)
+    (raise-argument-error 'pa-set-stream-finished-callback "stream" 0 stream))
+  (pa-set-stream-finished-callback/raw (stream-ptr stream)))
+
+(define-checked pa-set-stream-finished-callback/raw
   (get-ffi-obj "Pa_SetStreamFinishedCallback"
                libportaudio
                (_fun _pa-stream-pointer _pa-stream-finished-callback -> _pa-error)))
@@ -1444,7 +1465,8 @@ PaError Pa_SetStreamFinishedCallback( PaStream *stream, PaStreamFinishedCallback
 */
 PaError Pa_StartStream( PaStream *stream );
 |#
-(define-checked pa-start-stream
+
+(define-checked pa-start-stream/raw
   (get-ffi-obj "Pa_StartStream"
                libportaudio
                (_fun _pa-stream-pointer -> _pa-error)))
@@ -1831,10 +1853,7 @@ void Pa_Sleep( long msec );
 
 ;; WRAPPERS:
 
-;; stop unless it's already been stopped.
-(define (pa-maybe-stop-stream stream)
-  (when (pa-stream-active? stream)
-    (pa-stop-stream stream)))
+
 
 ;; initialize unless it's already been initialized.
 (define (pa-maybe-initialize)

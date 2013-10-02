@@ -84,7 +84,7 @@
   (define (stats)
     (stream-stats stream))
   (define (stopper)
-    (pa-maybe-stop-stream stream))
+    (pa-maybe-close-stream stream))
   (list stream-time stats stopper))
 
 ;; the safe version checks the index of each sample before it's 

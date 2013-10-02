@@ -59,7 +59,7 @@
   (pa-set-stream-finished-callback stream copying-info-free)
   (pa-start-stream stream)
   (define (stopper)
-    (pa-maybe-stop-stream stream))
+    (pa-maybe-close-stream stream))
   stopper)
 
 (define (check-args vec total-frames start-frame stop-frame)
