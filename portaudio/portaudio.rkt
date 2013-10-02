@@ -79,8 +79,19 @@
            (pa-semi-checked binding name-as-symbol)))]))
 
 
+;; DEBUGGING TIME
+(define open-stream-channel (make-channel))
+(define stream-opens (box 0))
+(define stream-closes (box 0))
+(thread
+ (lambda ()
+   (let loop ()
+     (match (channel-get open-stream-channel)
+       ['open (set-box! stream-opens (add1 (unbox stream-opens)))]
+       ['close (set-box! stream-closes (add1 (unbox stream-closes)))])
+     (loop))))
 
-;; headers taken from 19.20110326 release of portaudio.h
+;; headers taken from release of portaudio.h
 
 ;; note that every line of the header file appears here verbatim; this means
 ;; that you can 'diff' this file against the header file, and check that the
@@ -1278,7 +1289,8 @@ PaError Pa_OpenStream( PaStream** stream,
                      -> (err : _pa-error)
                      -> (match err
                           ['paNoError
-                           (begin (add-managed result 
+                           (begin (channel-put open-stream-channel 'open)
+                                  (add-managed result 
                                                close-stream-callback)
                                   result)]
                           [other (error 'pa-open-stream "~a" 
@@ -1339,7 +1351,8 @@ PaError Pa_OpenDefaultStream( PaStream** stream,
                      -> (err : _pa-error)
                      -> (match err
                           ['paNoError  
-                           (begin (add-managed result 
+                           (begin (channel-put open-stream-channel 'open)
+                                  (add-managed result 
                                                close-stream-callback)
                                   result)]
                           [other (error 'pa-open-default-stream "~a" 
@@ -1370,6 +1383,7 @@ PaError Pa_CloseStream( PaStream *stream );
 ;; POSSIBLE PROBLEM: does the StreamFinishedCallback always happen?
 
 (define (pa-close-stream stream)
+  (channel-put open-stream-channel 'close)
   (pa-close-stream/raw stream))
 
 (define-checked pa-close-stream/raw
