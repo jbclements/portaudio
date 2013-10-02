@@ -23,6 +23,7 @@
   (printf "1/2-second tone at 302/500 Hz\n")
   (sleep 2)
   (printf "start...\n")
+  (s16vec-play v 0 #f 44100)
   (check-not-exn (lambda () (s16vec-play v 0 #f 44100)))
   (sleep 0.5)
   (printf "...stop.\n")

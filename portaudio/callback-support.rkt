@@ -35,6 +35,8 @@
   [copying-callback cpointer?]
   ;; the free function for a copying callback
   [copying-info-free cpointer?]
+  ;; the free function callable from racket
+  [copying-info-free-fn (c-> cpointer? any)]
   
   ;; make a sndplay record for recording a precomputed sound.
   [make-copying-info/rec (c-> nat? cpointer?)]
@@ -262,6 +264,11 @@
    _bogus-struct-pointer
    _pa-stream-callback))
 
+(define copying-info-free-fn
+  (get-ffi-obj "freeCopyingInfo" callbacks-lib 
+               (_fun _pointer -> _void)))
+
+;; the copying-info-free function pointer as a cpointer
 (define copying-info-free
   (cast
    (get-ffi-obj "freeCopyingInfo" callbacks-lib _bogus-struct)

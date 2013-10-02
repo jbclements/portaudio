@@ -101,6 +101,7 @@
     (check-equal? (pa-stream-active? stream) #f))
   
   (define tone-buf-380 (make-tone-buf 380 22050))
+  (define longlongtone (make-tone-buf 380 (* 30 44100)))
   
   ;; two simultaneous streams, 330 & 380 Hz
   (let ()
@@ -133,12 +134,13 @@
     (test-start)
     (pa-start-stream stream-1)
     (sleep 0.5)
-    (pa-maybe-stop-stream stream-1)
+    (pa-stop-stream stream-1)
     (sleep 0.1)
     (check-equal? (pa-stream-active? stream-1) #f)
+    (pa-close-stream stream-1)
     (test-end))
   
-  ;; try stopping a sound 3 times:
+  ;; try closing a stream a sound 3 times:
   (let ()
     (define info (make-copying-info longer-tone-buf 0 #f))
     (define stream-1 (open-test-stream 
@@ -149,9 +151,9 @@
     (test-start)
     (pa-start-stream stream-1)
     (sleep 0.5)
-    (pa-maybe-stop-stream stream-1)
-    (pa-maybe-stop-stream stream-1)
-    (pa-maybe-stop-stream stream-1)
+    (pa-close-stream stream-1)
+    (pa-close-stream stream-1)
+    (pa-close-stream stream-1)
     (test-end))
   
   ;; try stopping a sound that's already over:
@@ -165,11 +167,22 @@
     (test-start)
     (pa-start-stream stream-1)
     (sleep 1.0)
-    (pa-maybe-stop-stream stream-1)
+    (pa-stop-stream stream-1)
+    (test-end))
+  
+  
+  #;(let ()
+    (define info (make-copying-info longlongtone 0 #f))
+    (define stream-1 (open-test-stream 
+                      copying-callback
+                      info))
+    (pa-set-stream-finished-callback stream-1 copying-info-free)
+    (printf "30 seconds @ 380 Hz\n")
+    (test-start)
+    (pa-start-stream stream-1)
     (test-end))
   
   ;; tests for stream-play and s16vec-play....
-  
   ;; check for wrong size buffer
   
   #;(let ()
@@ -222,6 +235,7 @@
     (sleep 0.075)
     (set-box! abort-box #t)
     (test-end))
+
   
 
   )))

@@ -2,6 +2,7 @@
 
 (require ffi/vector
          ffi/unsafe
+         (only-in '#%foreign ffi-callback)
          (rename-in racket/contract [-> c->])
          "portaudio.rkt"
          "callback-support.rkt"
@@ -56,10 +57,23 @@
        '()           ;; stream-flags
        copying-callback
        copying-info)))
-  (pa-set-stream-finished-callback stream copying-info-free)
+  ;; yes, this is going to capture a pointer to the stream....
+  (pa-set-stream-finished-callback
+   stream
+   #;copying-info-free
+   (cast
+    (ffi-callback (lambda (userdata)
+                    13
+                    #;(copying-info-free-fn (stream-ptr stream))
+                    #;(pa-close-stream stream)
+                    (void))
+                  (list _pointer)
+                  _void)
+    _pointer
+    _pa-stream-finished-callback))
   (pa-start-stream stream)
   (define (stopper)
-    (pa-maybe-close-stream stream))
+    (pa-close-stream stream))
   stopper)
 
 (define (check-args vec total-frames start-frame stop-frame)

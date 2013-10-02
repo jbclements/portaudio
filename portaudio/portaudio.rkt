@@ -88,6 +88,15 @@
              (raise-argument-error name-as-symbol "stream" 0 stream))
            (name2 stream)))]))
 
+(define-syntax (define-stream-ptr-fun stx)
+  (syntax-parse stx
+    [(_ name1:id name2:id)
+     (with-syntax ([name-as-symbol #`(#%datum . #,(syntax-e #'name1))])
+       #`(define (name1 stream)
+           (unless (stream? stream)
+             (raise-argument-error name-as-symbol "stream" 0 stream))
+           (name2 (stream-ptr stream))))]))
+
 ;; DEBUGGING TIME
 (define open-stream-channel (make-channel))
 (define stream-opens (box 0))
@@ -1308,7 +1317,7 @@ PaError Pa_OpenStream( PaStream** stream,
                                   (define wrapped-result (make-stream result))
                                   (add-managed wrapped-result
                                                close-stream-callback)
-                                  result)]
+                                  wrapped-result)]
                           [other (error 'pa-open-stream "~a" 
                                         (pa-get-error-text err))]))))
 
@@ -1371,14 +1380,15 @@ PaError Pa_OpenDefaultStream( PaStream** stream,
                                   (define wrapped-result (make-stream result))
                                   (add-managed wrapped-result
                                                close-stream-callback)
-                                  result)]
+                                  wrapped-result)]
                           [other (error 'pa-open-default-stream "~a" 
                                         (pa-get-error-text err))]))))
 
-
+;; looks like this actually *does* get called, but only on a custodian-shutdown,
+;; not on GC.  I think that's a good thing? I was worried about streams being
+;; collected too early. Urg.
 (define close-stream-callback
   (ffi-callback (lambda (p _)
-                  (fprintf (current-error-port) "AARROOOGAH! ARROOOOGAH!\n")
                   (pa-close-stream p))
                 (list _racket _pointer)
                 _void))
@@ -1392,15 +1402,16 @@ PaError Pa_OpenDefaultStream( PaStream** stream,
 PaError Pa_CloseStream( PaStream *stream );
 |#
 
+(define-stream-fun pa-close-stream pa-close-stream/inner)
+
 ;; takes a (wrapped) stream, closes it
 ;; unless it's already been closed
-(define (pa-close-stream stream)
-  (unless (stream? stream)
-    (raise-argument-error 'pa-close-stream "stream" 0 stream))
+(define (pa-close-stream/inner stream)
+  (fprintf (current-error-port) "pa-close-stream called.\n")
   (when (semaphore-try-wait? (stream-sema stream))
+    (fprintf (current-error-port) "pa-close-stream actually happening.\n")
     (channel-put open-stream-channel 'close)
-    (pa-close-stream/raw (stream-ptr stream))
-    (pa-close-stream (stream-ptr stream))))
+    (pa-close-stream/raw (stream-ptr stream))))
 
 (define-checked pa-close-stream/raw
   (get-ffi-obj "Pa_CloseStream"
@@ -1425,7 +1436,7 @@ PaError Pa_CloseStream( PaStream *stream );
 */
 typedef void PaStreamFinishedCallback( void *userData );
 |#
-;; not porting this to scheme; it's a better idea just to keep it in C.
+;; not porting this to Racket; it's a better idea just to keep it in C.
 (define-cpointer-type _pa-stream-finished-callback)
 #|
 
@@ -1450,10 +1461,11 @@ typedef void PaStreamFinishedCallback( void *userData );
 */
 PaError Pa_SetStreamFinishedCallback( PaStream *stream, PaStreamFinishedCallback* streamFinishedCallback ); 
 |#
-(define (pa-set-stream-finished-callback stream)
+(define (pa-set-stream-finished-callback stream callback)
   (unless (stream? stream)
-    (raise-argument-error 'pa-set-stream-finished-callback "stream" 0 stream))
-  (pa-set-stream-finished-callback/raw (stream-ptr stream)))
+    (raise-argument-error 'pa-set-stream-finished-callback 
+                          "stream" 0 stream callback))
+  (pa-set-stream-finished-callback/raw (stream-ptr stream) callback))
 
 (define-checked pa-set-stream-finished-callback/raw
   (get-ffi-obj "Pa_SetStreamFinishedCallback"
@@ -1465,6 +1477,8 @@ PaError Pa_SetStreamFinishedCallback( PaStream *stream, PaStreamFinishedCallback
 */
 PaError Pa_StartStream( PaStream *stream );
 |#
+
+(define-stream-ptr-fun pa-start-stream pa-start-stream/raw)
 
 (define-checked pa-start-stream/raw
   (get-ffi-obj "Pa_StartStream"
@@ -1481,7 +1495,10 @@ PaError Pa_StopStream( PaStream *stream );
 ;; this changes the stream to "stopped" state, but 
 ;; does not do the job of CloseStream--that is, freeing
 ;; the resources associated with the stream.
-(define-checked pa-stop-stream
+
+(define-stream-ptr-fun pa-stop-stream pa-stop-stream/raw)
+
+(define-checked pa-stop-stream/raw
   (get-ffi-obj "Pa_StopStream"
                libportaudio
                (_fun _pa-stream-pointer -> _pa-error)))
@@ -1496,7 +1513,10 @@ PaError Pa_AbortStream( PaStream *stream );
 ;; this changes the stream to "stopped" state and dumps 
 ;; remaining samples, but does not do the job of CloseStream--
 ;; that is, freeing the resources associated with the stream.
-(define-checked pa-abort-stream
+
+(define-stream-ptr-fun pa-abort-stream pa-abort-stream/raw)
+
+(define-checked pa-abort-stream/raw
   (get-ffi-obj "Pa_AbortStream"
                libportaudio
                (_fun _pa-stream-pointer -> _pa-error)))
@@ -1521,7 +1541,9 @@ PaError Pa_IsStreamStopped( PaStream *stream );
 |#
 
 ;; untested:
-(define pa-stream-stopped?
+(define-stream-ptr-fun pa-stream-stopped? pa-stream-stopped?/raw)
+
+(define pa-stream-stopped?/raw
   (get-ffi-obj "Pa_IsStreamStopped"
                libportaudio
                (_fun _pa-stream-pointer 
@@ -1548,7 +1570,9 @@ PaError Pa_IsStreamStopped( PaStream *stream );
 */
 PaError Pa_IsStreamActive( PaStream *stream );
 |#
-(define pa-stream-active?
+(define-stream-ptr-fun pa-stream-active? pa-stream-active?/raw)
+
+(define pa-stream-active?/raw
   (get-ffi-obj "Pa_IsStreamActive"
                libportaudio
                (_fun _pa-stream-pointer 
@@ -1622,7 +1646,10 @@ typedef struct PaStreamInfo
 const PaStreamInfo* Pa_GetStreamInfo( PaStream *stream );
 
 |#
-(define pa-get-stream-info
+
+(define-stream-ptr-fun pa-get-stream-info pa-get-stream-info/raw)
+
+(define pa-get-stream-info/raw
   (get-ffi-obj "Pa_GetStreamInfo"
                libportaudio
                (_fun _pa-stream-pointer -> _pa-stream-info-pointer)))
@@ -1646,7 +1673,9 @@ const PaStreamInfo* Pa_GetStreamInfo( PaStream *stream );
 PaTime Pa_GetStreamTime( PaStream *stream );
 |#
 
-(define pa-get-stream-time
+(define-stream-ptr-fun pa-get-stream-time pa-get-stream-time/raw)
+
+(define pa-get-stream-time/raw
   (get-ffi-obj "Pa_GetStreamTime"
                libportaudio
                (_fun _pa-stream-pointer 
@@ -1682,7 +1711,9 @@ double Pa_GetStreamCpuLoad( PaStream* stream );
 ;; this number will be very low, because it only includes time spent 
 ;; copying (in C), not time spent generating samples (in Racket)
 
-(define pa-get-stream-cpu-load
+(define-stream-ptr-fun pa-get-stream-cpu-load pa-get-stream-cpu-load/raw)
+
+(define pa-get-stream-cpu-load/raw
   (get-ffi-obj "Pa_GetStreamCpuLoad"
                libportaudio
                (_fun _pa-stream-pointer -> _double)))
@@ -1718,7 +1749,9 @@ PaError Pa_ReadStream( PaStream* stream,
 
 ;; *** UNTESTED ***:
 
-(define-checked pa-read-stream
+(define-stream-ptr-fun pa-read-stream pa-read-stream/raw)
+
+(define-checked pa-read-stream/raw
   (get-ffi-obj "Pa_ReadStream"
                libportaudio
                (_fun _pa-stream-pointer _pointer _ulong -> _pa-error)))
@@ -1752,7 +1785,12 @@ PaError Pa_WriteStream( PaStream* stream,
                         unsigned long frames );
 |#
 
-(define-checked pa-write-stream
+(define (pa-write-stream stream buffer frames)
+  (unless (stream? stream)
+    (raise-argument-error 'pa-write-stream "stream" 0 stream buffer frames))
+  (pa-write-stream/raw stream buffer frames))
+
+(define-checked pa-write-stream/raw
   (get-ffi-obj "Pa_WriteStream"
                libportaudio
                (_fun _pa-stream-pointer _pointer _ulong -> _pa-error)))
@@ -1771,8 +1809,9 @@ signed long Pa_GetStreamReadAvailable( PaStream* stream );
 |#
 
 ;; *** UNTESTED ***:
+(define-stream-ptr-fun pa-get-stream-read-available pa-get-stream-read-available/raw)
 
-(define pa-get-stream-read-available
+(define pa-get-stream-read-available/raw
   (get-ffi-obj "Pa_GetStreamReadAvailable"
                libportaudio
                (_fun _pa-stream-pointer -> 
@@ -1796,7 +1835,9 @@ signed long Pa_GetStreamWriteAvailable( PaStream* stream );
 
 |#
 
-(define pa-get-stream-write-available
+(define-stream-ptr-fun pa-get-stream-write-available pa-get-stream-write-available/raw)
+
+(define pa-get-stream-write-available/raw
   (get-ffi-obj "Pa_GetStreamWriteAvailable"
                libportaudio
                (_fun _pa-stream-pointer -> 
