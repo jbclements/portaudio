@@ -61,16 +61,13 @@
   (pa-set-stream-finished-callback
    stream
    #;copying-info-free
-   (cast
-    (ffi-callback (lambda (userdata)
-                    13
-                    #;(copying-info-free-fn (stream-ptr stream))
-                    #;(pa-close-stream stream)
-                    (void))
-                  (list _pointer)
-                  _void)
-    _pointer
-    _pa-stream-finished-callback))
+   (ffi-callback (lambda (userdata)
+                   #;13
+                   #;(copying-info-free-fn (stream-ptr stream))
+                   #;(pa-close-stream stream)
+                   (void))
+                 (list _pointer)
+                 _void))
   (pa-start-stream stream)
   (define (stopper)
     (pa-close-stream stream))

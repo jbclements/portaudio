@@ -1437,7 +1437,9 @@ PaError Pa_CloseStream( PaStream *stream );
 typedef void PaStreamFinishedCallback( void *userData );
 |#
 ;; not porting this to Racket; it's a better idea just to keep it in C.
-(define-cpointer-type _pa-stream-finished-callback)
+(define _pa-stream-finished-callback
+  (_fun _pointer -> _void))
+#;(define-cpointer-type _pa-stream-finished-callback)
 #|
 
 

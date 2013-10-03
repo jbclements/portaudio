@@ -34,9 +34,8 @@
   ;; a sndplay record:
   [copying-callback cpointer?]
   ;; the free function for a copying callback
-  [copying-info-free cpointer?]
+  #;[copying-info-free cpointer?]
   ;; the free function callable from racket
-  [copying-info-free-fn (c-> cpointer? any)]
   
   ;; make a sndplay record for recording a precomputed sound.
   [make-copying-info/rec (c-> nat? cpointer?)]
@@ -60,7 +59,9 @@
   ;; buffer provided in time by racket)?
   [stream-fails (c-> cpointer? integer?)]
   ;; the free function for a streaming callback
-  [streaming-info-free cpointer?]))
+  #;[streaming-info-free cpointer?]))
+
+(provide copying-info-free-fn streaming-info-free-fn)
 
 (define (frames? n)
   (and (exact-integer? n)
@@ -269,14 +270,16 @@
                (_fun _pointer -> _void)))
 
 ;; the copying-info-free function pointer as a cpointer
-(define copying-info-free
+#;(define copying-info-free
   (cast
    (get-ffi-obj "freeCopyingInfo" callbacks-lib _bogus-struct)
    _bogus-struct-pointer
    _pa-stream-finished-callback))
 
-(define streaming-info-free
-  (cast
+(define streaming-info-free-fn
+  (get-ffi-obj "freeStreamingInfo" callbacks-lib 
+               (_fun _pointer -> _void))
+  #;(cast
    (get-ffi-obj "freeStreamingInfo" callbacks-lib _bogus-struct)
    _bogus-struct-pointer
    _pa-stream-finished-callback))
