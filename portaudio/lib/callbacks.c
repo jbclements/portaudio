@@ -187,11 +187,14 @@ void freeCopyingInfo(soundCopyingInfo *ri){
 // clean up a streamingInfo record when done.
 void freeStreamingInfo(soundStreamInfo *ssi){
 
+  // actually, I see a race condition here;
+  // I think the all_done should be set to 1 *before*
+  // the free.  I can't bear to recompile on windows, though....
   free(ssi->buffer);
   // when all_done is 1, this triggers self-destruct:
   // note that we're not mutating the structure here,
   // but rather a cell that it points to, so it will
-  // survine the free(ssi).
+  // survive the free(ssi).
   *(ssi->all_done) = 1;
   free(ssi);
 }

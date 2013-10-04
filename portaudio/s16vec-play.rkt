@@ -57,20 +57,32 @@
        '()           ;; stream-flags
        copying-callback
        copying-info)))
-  ;; yes, this is going to capture a pointer to the stream....
   (pa-set-stream-finished-callback
    stream
-   #;copying-info-free
-   (ffi-callback (lambda (userdata)
-                   #;13
-                   #;(copying-info-free-fn (stream-ptr stream))
-                   #;(pa-close-stream stream)
-                   (void))
-                 (list _pointer)
-                 _void))
+   copying-info-free)
   (pa-start-stream stream)
   (define (stopper)
     (pa-close-stream stream))
+  ;; this is the "worse is better" solution to closing streams;
+  ;; polling is bad, but callbacks from C into Racket seem really
+  ;; fragile, and the polling here can afford to be quite coarse.
+  ;; the danger of not polling enough is that too many streams
+  ;; will be open, and that the system will start rejecting open-stream
+  ;; calls. As of 2013, Ubuntu seems to support 32 streams, and OS X
+  ;; an unbounded number. What about Windows? Dunno, let's go check.
+  (define sound-seconds (/ sound-frames sample-rate))
+  (define expected-startup-latency 0.02)
+  (define fail-wait 0.5)
+  (thread 
+   (lambda ()
+     ;; hopefully this is long enough for the sound to finish:
+     (sleep (+ expected-startup-latency sound-seconds))
+     (let loop ()
+       (if (not (pa-stream-active? stream))
+           (pa-close-stream stream)
+           ;; nope, wait longer.
+           (begin (sleep fail-wait)
+                  (loop))))))
   stopper)
 
 (define (check-args vec total-frames start-frame stop-frame)

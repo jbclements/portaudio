@@ -100,10 +100,10 @@
        (set! log (cons (stream-rec-last-frame-read stream-info) log))
        (sleep 0.02))))
     (sleep 4.0)
-    ;; check 3x stop:
-    (pa-maybe-stop-stream stream)
-    (pa-maybe-stop-stream stream)
-    (pa-maybe-stop-stream stream)
+    ;; check 3x close:
+    (pa-close-stream stream)
+    (pa-close-stream stream)
+    (pa-close-stream stream)
     (test-end)
     (define log2 (reverse log))
     (printf "faults: ~s\n" (stream-fails stream-info))
@@ -132,9 +132,9 @@
     (pa-start-stream stream)
     (sleep 5.0)
     ;; check 3x stop:
-    (pa-maybe-stop-stream stream)
-    (pa-maybe-stop-stream stream)
-    (pa-maybe-stop-stream stream)
+    (pa-close-stream stream)
+    (pa-close-stream stream)
+    (pa-close-stream stream)
     (test-end)
     (printf "faults: ~s\n" (stream-fails stream-info)))
   
@@ -163,7 +163,7 @@
     (test-start)
     (pa-start-stream stream)
     (sleep 10.0)
-    (pa-maybe-stop-stream stream)
+    (pa-close-stream stream)
     (test-end)
 
     (printf "fails: ~s\n" (stream-fails stream-info))
@@ -203,7 +203,7 @@
     (test-start)
     (pa-start-stream stream)
     (sleep 2.0)
-    (pa-maybe-stop-stream stream)
+    (pa-close-stream stream)
     (test-end)
     
     (printf "fails: ~s\n" (stream-fails stream-info))

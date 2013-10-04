@@ -52,6 +52,10 @@
              (lambda ()
                (s16vec-play v 10000 0 44100)))
   ;; simultaneous play:
+  (printf "check whether closes are happening:\n")
+  (for ([i (in-range 100)])
+    (check-not-exn (lambda () (s16vec-play v 0 4410 44100)))
+    (sleep 0.1))
   
   (printf "10 near-simultaneous copies of the sound")
   (sleep 2)

@@ -1407,9 +1407,7 @@ PaError Pa_CloseStream( PaStream *stream );
 ;; takes a (wrapped) stream, closes it
 ;; unless it's already been closed
 (define (pa-close-stream/inner stream)
-  (fprintf (current-error-port) "pa-close-stream called.\n")
   (when (semaphore-try-wait? (stream-sema stream))
-    (fprintf (current-error-port) "pa-close-stream actually happening.\n")
     (channel-put open-stream-channel 'close)
     (pa-close-stream/raw (stream-ptr stream))))
 
@@ -1437,9 +1435,7 @@ PaError Pa_CloseStream( PaStream *stream );
 typedef void PaStreamFinishedCallback( void *userData );
 |#
 ;; not porting this to Racket; it's a better idea just to keep it in C.
-(define _pa-stream-finished-callback
-  (_fun _pointer -> _void))
-#;(define-cpointer-type _pa-stream-finished-callback)
+(define-cpointer-type _pa-stream-finished-callback)
 #|
 
 

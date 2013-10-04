@@ -55,15 +55,14 @@
   ;; totally heuristic here:
   (define min-buffer-time (+ promised-latency (* 2 sleep-interval)))
   (when (< buffer-time min-buffer-time)
-    (fprintf (current-error-port) "WARNING: using buffer of ~sms to satisfy API requirements.\n"
-             (* 1000 min-buffer-time)))
+    (log-warning (format "WARNING: using buffer of ~sms to satisfy API requirements.\n"
+                         (* 1000 min-buffer-time))))
   (log-debug (format "Portaudio: chosen device requested latency: ~sms" (round-to-hundredth (* 1000 promised-latency))))
   (define buffer-frames (buffer-time->frames (max min-buffer-time buffer-time) sample-rate))
   (match-define (list stream-info all-done-ptr)
     (make-streaming-info buffer-frames))
   (define stream (stream-open stream-info chosen-device promised-latency sample-rate))
-  (pa-set-stream-finished-callback stream
-                                   streaming-info-free)
+  (pa-set-stream-finished-callback stream streaming-info-free)
   ;; pre-fill of first buffer:
   (call-buffer-filler stream-info buffer-filler)
   (define filling-thread
@@ -71,6 +70,7 @@
      (lambda ()
        (let loop ()
          (cond [(all-done? all-done-ptr)
+                (pa-close-stream stream)
                 (free all-done-ptr)]
                [else
                 (define start-time (pa-get-stream-time stream))
@@ -84,7 +84,7 @@
   (define (stats)
     (stream-stats stream))
   (define (stopper)
-    (pa-maybe-close-stream stream))
+    (pa-close-stream stream))
   (list stream-time stats stopper))
 
 ;; the safe version checks the index of each sample before it's 

@@ -81,6 +81,19 @@
   (define tone-buf-330 (make-tone-buf 330 22050))
   
   
+  ;; test how many open streams a platform supports....
+  #;(let loop ([i 0])
+    (printf "iter: ~v\n" i)
+    (define abort-box (box #f))
+    (define tone-buf-330-10 (make-tone-buf 330 (* 10 44100)))
+    (define callback-info (make-copying-info tone-buf-330-10 0 #f))
+    (define stream (open-test-stream copying-callback callback-info))
+    (pa-set-stream-finished-callback stream copying-info-free)
+    (printf "10 seconds @ 330 Hz\n")
+    (pa-start-stream stream)
+    (sleep 0.25)
+    (loop (add1 i)))
+  
   ;; first, test the copying-callback.
   (let ()
     (define abort-box (box #f))
