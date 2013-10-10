@@ -97,17 +97,26 @@
              (raise-argument-error name-as-symbol "stream" 0 stream))
            (name2 (stream-ptr stream))))]))
 
-;; DEBUGGING TIME
+;; USE FOR DEBUGGING
+;; counts the number of net open streams, to see whether it's zero as it should be.
+;; to use, uncomment for debugging in the two places immediately below:
 (define open-stream-channel (make-channel))
 (define stream-opens (box 0))
 (define stream-closes (box 0))
-(thread
- (lambda ()
-   (let loop ()
-     (match (channel-get open-stream-channel)
-       ['open (set-box! stream-opens (add1 (unbox stream-opens)))]
-       ['close (set-box! stream-closes (add1 (unbox stream-closes)))])
-     (loop))))
+(define (stream-counter-put! symbol)
+  ;; uncomment for debugging:
+  #;(channel-put open-stream-channel symbol)
+  (void))
+;; just giving this a name so nothing gets printed to stdout:
+;; uncomment for debugging:
+#;(define tally-thread
+  (thread
+   (lambda ()
+     (let loop ()
+       (match (channel-get open-stream-channel)
+         ['open (set-box! stream-opens (add1 (unbox stream-opens)))]
+         ['close (set-box! stream-closes (add1 (unbox stream-closes)))])
+       (loop)))))
 
 ;; every stream is associated with a semaphore, which ensures that CloseStream
 ;; only gets called once on a stream.
@@ -1313,7 +1322,7 @@ PaError Pa_OpenStream( PaStream** stream,
                      -> (err : _pa-error)
                      -> (match err
                           ['paNoError
-                           (begin (channel-put open-stream-channel 'open)
+                           (begin (stream-counter-put! 'open)
                                   (define wrapped-result (make-stream result))
                                   (add-managed wrapped-result
                                                close-stream-callback)
@@ -1376,7 +1385,7 @@ PaError Pa_OpenDefaultStream( PaStream** stream,
                      -> (err : _pa-error)
                      -> (match err
                           ['paNoError  
-                           (begin (channel-put open-stream-channel 'open)
+                           (begin (stream-counter-put! 'open)
                                   (define wrapped-result (make-stream result))
                                   (add-managed wrapped-result
                                                close-stream-callback)
@@ -1408,7 +1417,7 @@ PaError Pa_CloseStream( PaStream *stream );
 ;; unless it's already been closed
 (define (pa-close-stream/inner stream)
   (when (semaphore-try-wait? (stream-sema stream))
-    (channel-put open-stream-channel 'close)
+    (stream-counter-put! 'close)
     (pa-close-stream/raw (stream-ptr stream))))
 
 (define-checked pa-close-stream/raw
