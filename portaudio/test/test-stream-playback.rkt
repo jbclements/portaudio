@@ -6,7 +6,8 @@
          ffi/vector
          ffi/unsafe
          rackunit
-         rackunit/text-ui)
+         rackunit/text-ui
+         math/statistics)
 
 (define twopi (* 2 pi))
 
@@ -207,14 +208,8 @@
     (test-end)
     
     (printf "fails: ~s\n" (stream-fails stream-info))
-    (define (mean l) (/ (apply + l) (length l)))
-    (define (stdevp l)
-      (define m (mean l))
-      (/ (for/sum ([i (in-list l)])
-                  (sqr (- i m)))
-         (length l)))
     (printf "time-used mean: ~s\n" (mean log3))
-    (printf "time-used stdev: ~s\n" (stdevp log3))
+    (printf "time-used stdev: ~s\n" (stddev log3))
     
     )
   
