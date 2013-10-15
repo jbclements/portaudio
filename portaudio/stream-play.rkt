@@ -73,14 +73,18 @@
                 (pa-close-stream stream)
                 (free all-done-ptr)]
                [else
-                (define start-time (pa-get-stream-time stream))
+                ;; it appears that pa-get-stream-time nearly always fails on 
+                ;; linux platforms.... using current-inexact-milliseconds instead.
+                (define start-time (current-inexact-milliseconds))
                 (call-buffer-filler stream-info buffer-filler)
-                (define time-used (- (pa-get-stream-time stream) start-time))
+                (define time-used (/ (- (current-inexact-milliseconds) start-time) 1000.0))
                 (sleep (max 0.0 (- sleep-interval time-used)))
                 (loop)])))))
   (pa-start-stream stream)
   (define (stream-time)
-    (pa-get-stream-time stream))
+    ;; kind of pointless at this point to even provide this....
+    (current-inexact-milliseconds)
+    #;(pa-get-stream-time stream))
   (define (stats)
     (stream-stats stream))
   (define (stopper)

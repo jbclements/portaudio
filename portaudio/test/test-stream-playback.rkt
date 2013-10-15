@@ -3,11 +3,16 @@
 (require "../portaudio.rkt"
          "../callback-support.rkt"
          "helpers.rkt"
+         "../devices.rkt"
          ffi/vector
          ffi/unsafe
          rackunit
          rackunit/text-ui
          math/statistics)
+
+;(pa-maybe-initialize)
+;(display-device-table)
+;(set-output-device! 5)
 
 (define twopi (* 2 pi))
 
@@ -153,9 +158,10 @@
        (lambda ()
          (let loop ()
            (cond [(not (all-done? all-done-ptr))
-                  (define start-time (pa-get-stream-time stream))
+                  (define start-time (current-inexact-milliseconds))
                   (call-buffer-filler stream-info (make-buffer-filler 0))
-                  (define time-used (- (pa-get-stream-time stream) start-time))
+                  (define time-used (/ (- (current-inexact-milliseconds) start-time)
+                                       1000.0))
                   (set! log3 (cons time-used log3))
                   (sleep (max 0.0 (- sleep-interval time-used)))
                   (loop)]
@@ -193,11 +199,12 @@
        (lambda ()
          (let loop ()
            (unless (all-done? all-done-ptr)
-             (define start-time (pa-get-stream-time stream))
+             (define start-time (current-inexact-milliseconds))
              (call-buffer-filler stream-info (make-buffer-filler 0))
              ;; sleep way too long :
              (sleep 0.5)
-             (define time-used (- (pa-get-stream-time stream) start-time))
+             (define time-used (/ (- (current-inexact-milliseconds) start-time)
+                                  1000))
              (set! log3 (cons time-used log3))
              (sleep (max 0.0 (- sleep-interval time-used)))
              (loop))))))
