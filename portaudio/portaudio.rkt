@@ -95,7 +95,7 @@
        #`(define (name1 stream)
            (unless (stream? stream)
              (raise-argument-error name-as-symbol "stream" 0 stream))
-           (name2 (stream-ptr stream))))]))
+           (name2 (unbox (stream-ptr-box stream)))))]))
 
 ;; USE FOR DEBUGGING
 ;; counts the number of net open streams, to see whether it's zero as it should be.
@@ -119,10 +119,15 @@
        (loop)))))
 
 ;; every stream is associated with a semaphore, which ensures that CloseStream
-;; only gets called once on a stream.
-(struct stream (ptr sema))
+;; only gets called once on a stream. The box is changed to #f when close-stream
+;; is called, to prevent calling other functions on it. This mechanism is not 
+;; entirely race-free....
+(struct stream (ptr-box sema))
 (define (make-stream ptr)
-  (stream ptr (make-semaphore 1)))
+  (stream (box ptr) (make-semaphore 1)))
+
+(define (stream-already-closed? stream)
+  (eq? #f (unbox (stream-ptr-box stream))))
 
 ;; headers taken from release of portaudio.h
 
@@ -1418,7 +1423,9 @@ PaError Pa_CloseStream( PaStream *stream );
 (define (pa-close-stream/inner stream)
   (when (semaphore-try-wait? (stream-sema stream))
     (stream-counter-put! 'close)
-    (pa-close-stream/raw (stream-ptr stream))))
+    (define the-ptr (unbox (stream-ptr-box stream)))
+    (set-box! (stream-ptr-box stream) #f)
+    (pa-close-stream/raw the-ptr)))
 
 (define-checked pa-close-stream/raw
   (get-ffi-obj "Pa_CloseStream"
@@ -1472,7 +1479,7 @@ PaError Pa_SetStreamFinishedCallback( PaStream *stream, PaStreamFinishedCallback
   (unless (stream? stream)
     (raise-argument-error 'pa-set-stream-finished-callback 
                           "stream" 0 stream callback))
-  (pa-set-stream-finished-callback/raw (stream-ptr stream) callback))
+  (pa-set-stream-finished-callback/raw (unbox (stream-ptr-box stream)) callback))
 
 (define-checked pa-set-stream-finished-callback/raw
   (get-ffi-obj "Pa_SetStreamFinishedCallback"

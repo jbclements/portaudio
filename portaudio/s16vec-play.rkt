@@ -78,11 +78,16 @@
      ;; hopefully this is long enough for the sound to finish:
      (sleep (+ expected-startup-latency sound-seconds))
      (let loop ()
-       (if (not (pa-stream-active? stream))
-           (pa-close-stream stream)
-           ;; nope, wait longer.
-           (begin (sleep fail-wait)
-                  (loop))))))
+       (cond [(stream-already-closed? stream) 
+              ;; nothing to be done
+              #f]
+             [(not (pa-stream-active? stream))
+              ;; inactive, close it:
+              (pa-close-stream stream)]
+             [else
+              ;; wait and try again:
+              (begin (sleep fail-wait)
+                  (loop))]))))
   stopper)
 
 (define (check-args vec total-frames start-frame stop-frame)

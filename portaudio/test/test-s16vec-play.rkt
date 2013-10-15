@@ -20,6 +20,15 @@
     (define sample (inexact->exact (round (* 32767 (* 0.2 (sin (* (/ 1 44100) pi 2 i 500)))))))
     (s16vector-set! v (* i channels) sample)
     (s16vector-set! v (add1 (* i channels)) sample))
+  
+  ;; using the stopper while the sound is playing, no error on the cleanup thread please...
+  (printf "using the stopper while the sound is playing, no error on the cleanup thread please...\n")
+  (printf "start...\n")
+  (define stopper (s16vec-play v 0 #f 44100))
+  (stopper)
+  (sleep 3)
+  (printf "...stop.\n")
+  
   (printf "1/2-second tone at 302/500 Hz\n")
   (sleep 2)
   (printf "start...\n")
