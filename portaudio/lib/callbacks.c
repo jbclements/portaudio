@@ -191,7 +191,7 @@ void freeStreamingInfo(soundStreamInfo *ssi){
   // I think the all_done should be set to 1 *before*
   // the free.  I can't bear to recompile on windows, though....
   free(ssi->buffer);
-  // when all_done is 1, this triggers self-destruct:
+  // when all_done is 1, this triggers racket to call PaClose on the stream.
   // note that we're not mutating the structure here,
   // but rather a cell that it points to, so it will
   // survive the free(ssi).
