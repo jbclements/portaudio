@@ -14,9 +14,12 @@
           [output-device (parameter/c (or/c false? nat?))]
           [find-output-device (-> number? nat?)]
           [device-low-output-latency (-> nat? number?)]))
+
 ;; can't put contract on it, or can't use in teaching languages:
-(provide set-host-api!)
-(provide set-output-device!)
+(provide set-host-api!
+         set-output-device!
+         display-device-table)
+
 
 (define nat? exact-nonnegative-integer?)
 
@@ -163,3 +166,15 @@
 ;; return the low output latency of a device 
 (define (device-low-output-latency i)
   (pa-device-info-default-low-output-latency (pa-get-device-info i)))
+
+
+(define (display-device-table)
+  (define host-apis (all-host-apis))
+  (for ([i (pa-get-device-count)])
+    (define device-info (pa-get-device-info i))
+    (printf "device index ~s: api = ~s, device name = ~s, ~s input channels, ~s output channels\n"
+            i 
+            (list-ref host-apis (pa-device-info-host-api device-info))
+            (pa-device-info-name device-info)
+            (pa-device-info-max-input-channels device-info)
+            (pa-device-info-max-output-channels device-info))))
