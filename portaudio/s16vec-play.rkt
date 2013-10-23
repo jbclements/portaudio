@@ -62,7 +62,9 @@
    copying-info-free)
   (pa-start-stream stream)
   (define (stopper)
-    (pa-close-stream stream))
+    (pa-close-stream stream)
+    (void))
+  
   ;; this is the "worse is better" solution to closing streams;
   ;; polling is bad, but callbacks from C into Racket seem really
   ;; fragile, and the polling here can afford to be quite coarse.

@@ -1424,7 +1424,15 @@ PaError Pa_CloseStream( PaStream *stream );
   (when (semaphore-try-wait? (stream-sema stream))
     (stream-counter-put! 'close)
     (define the-ptr (unbox (stream-ptr-box stream)))
+    ;; setting this to #f just turns normal-looking errors
+    ;; into segfaults....
     (set-box! (stream-ptr-box stream) #f)
+    (remove-managed the-ptr)
+    ;; bizarrely, calling stop-stream prevents some kind of 
+    ;; deadlock here. I'm guessing that 
+    ;; the abort-stream that otherwise happens as part of 
+    ;; close-stream is not as patient and rushes into deadlock.
+    (pa-stop-stream/raw the-ptr)
     (pa-close-stream/raw the-ptr)))
 
 (define-checked pa-close-stream/raw
