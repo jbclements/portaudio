@@ -137,7 +137,9 @@
   (define longer-tone-buf (make-tone-buf 440 441000))
   
   ;; ending a stream with stop-stream
-  (let ()
+  ;; commented out because calling stop-stream is now a bad
+  ;; idea, cf comments in portaudio.rkt
+  #;(let ()
     (define info (make-copying-info longer-tone-buf 0 #f))
     (define stream-1 (open-test-stream 
                       copying-callback
@@ -150,6 +152,20 @@
     (pa-stop-stream stream-1)
     (sleep 0.1)
     (check-equal? (pa-stream-active? stream-1) #f)
+    (pa-close-stream stream-1)
+    (test-end))
+  
+  ;; ending a stream with close-stream
+  (let ()
+    (define info (make-copying-info longer-tone-buf 0 #f))
+    (define stream-1 (open-test-stream 
+                      copying-callback
+                      info))
+    (pa-set-stream-finished-callback stream-1 copying-info-free)
+    (printf "1/2 second @ 440 Hz\n")
+    (test-start)
+    (pa-start-stream stream-1)
+    (sleep 0.5)
     (pa-close-stream stream-1)
     (test-end))
   
@@ -170,7 +186,8 @@
     (test-end))
   
   ;; try stopping a sound that's already over:
-  (let ()
+  ;; ... no, actually, don't. Not using stop-stream.
+  #;(let ()
     (define info (make-copying-info tone-buf-380 0 #f))
     (define stream-1 (open-test-stream 
                       copying-callback

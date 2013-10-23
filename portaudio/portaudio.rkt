@@ -86,6 +86,8 @@
        #`(define (name1 stream)
            (unless (stream? stream)
              (raise-argument-error name-as-symbol "stream" 0 stream))
+           (unless (not (unbox (stream-closed?-box stream)))
+             (raise-argument-error name-as-symbol "not-yet-closed stream" 0 stream))
            (name2 stream)))]))
 
 (define-syntax (define-stream-ptr-fun stx)
@@ -95,7 +97,9 @@
        #`(define (name1 stream)
            (unless (stream? stream)
              (raise-argument-error name-as-symbol "stream" 0 stream))
-           (name2 (unbox (stream-ptr-box stream)))))]))
+           (unless (not (unbox (stream-closed?-box stream)))
+             (raise-argument-error name-as-symbol "not-yet-closed stream" 0 stream))
+           (name2 (stream-ptr stream))))]))
 
 ;; USE FOR DEBUGGING
 ;; counts the number of net open streams, to see whether it's zero as it should be.
@@ -122,12 +126,12 @@
 ;; only gets called once on a stream. The box is changed to #f when close-stream
 ;; is called, to prevent calling other functions on it. This mechanism is not 
 ;; entirely race-free....
-(struct stream (ptr-box sema))
+(struct stream (ptr closed?-box sema))
 (define (make-stream ptr)
-  (stream (box ptr) (make-semaphore 1)))
+  (stream ptr (box #f) (make-semaphore 1)))
 
 (define (stream-already-closed? stream)
-  (eq? #f (unbox (stream-ptr-box stream))))
+  (unbox (stream-closed?-box stream)))
 
 ;; headers taken from release of portaudio.h
 
@@ -1416,17 +1420,17 @@ PaError Pa_OpenDefaultStream( PaStream** stream,
 PaError Pa_CloseStream( PaStream *stream );
 |#
 
-(define-stream-fun pa-close-stream pa-close-stream/inner)
-
 ;; takes a (wrapped) stream, closes it
 ;; unless it's already been closed
-(define (pa-close-stream/inner stream)
+(define (pa-close-stream stream)
+  (unless (stream? stream)
+    (raise-argument-error 'close-stream "stream" 0 stream))
   (when (semaphore-try-wait? (stream-sema stream))
     (stream-counter-put! 'close)
-    (define the-ptr (unbox (stream-ptr-box stream)))
+    (define the-ptr (stream-ptr stream))
     ;; setting this to #f just turns normal-looking errors
     ;; into segfaults....
-    (set-box! (stream-ptr-box stream) #f)
+    (set-box! (stream-closed?-box stream) #t)
     (remove-managed the-ptr)
     ;; bizarrely, calling stop-stream prevents some kind of 
     ;; deadlock here. I'm guessing that 
@@ -1487,7 +1491,7 @@ PaError Pa_SetStreamFinishedCallback( PaStream *stream, PaStreamFinishedCallback
   (unless (stream? stream)
     (raise-argument-error 'pa-set-stream-finished-callback 
                           "stream" 0 stream callback))
-  (pa-set-stream-finished-callback/raw (unbox (stream-ptr-box stream)) callback))
+  (pa-set-stream-finished-callback/raw (stream-ptr stream) callback))
 
 (define-checked pa-set-stream-finished-callback/raw
   (get-ffi-obj "Pa_SetStreamFinishedCallback"
@@ -1518,6 +1522,13 @@ PaError Pa_StopStream( PaStream *stream );
 ;; does not do the job of CloseStream--that is, freeing
 ;; the resources associated with the stream.
 
+;; NOTE: DON'T CALL THIS FUNCTION. 
+;; since pa-close-stream now calls stop-stream before close-stream
+;; (to prevent deadlock, apparently necessary on custodian-shutdown
+;; for Linux at least), calling stop-stream is a bad idea, because
+;; it puts the stream in a state where close-stream signals an error.
+;; there are a number of ways of working around this, but the easiest
+;; is just not to call stop-stream. 
 (define-stream-ptr-fun pa-stop-stream pa-stop-stream/raw)
 
 (define-checked pa-stop-stream/raw
