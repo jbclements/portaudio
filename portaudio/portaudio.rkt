@@ -1407,7 +1407,8 @@ PaError Pa_OpenDefaultStream( PaStream** stream,
 ;; collected too early. Urg.
 (define close-stream-callback
   (ffi-callback (lambda (p _)
-                  (pa-close-stream p))
+                  (when (pa-initialized?)
+                    (pa-close-stream p)))
                 (list _racket _pointer)
                 _void))
 

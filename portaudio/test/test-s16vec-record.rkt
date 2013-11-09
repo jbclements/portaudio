@@ -12,14 +12,14 @@
 (test-suite "s16vec-record"
 (let ()
   
-  (define s (s16vec-record 22050 44100.0))
+  (define s (s16vec-record 1000 44100))
   
-  (check-equal? (* 22050 2) (s16vector-length s))
+  (check-equal? (* 1000 2) (s16vector-length s))
   
-  ;;(rsound s 0 22050 22050.0)
-  
-  
-
+  #:(define data (for/list ([p (s16vector->list s)]
+                          [i (in-naturals)])
+                 (vector i p)))
+  #;(display (plot (points data)))
   )))
 
 

@@ -11,7 +11,7 @@
 ;; this module provides a function that records a sound.
 
 (define nat? exact-nonnegative-integer?)
-#|
+
 (provide/contract [s16vec-record (c-> nat? integer? s16vector?)])
 
 (define channels 2)
@@ -33,8 +33,13 @@
      copying-info))
   ;;(pa-set-stream-finished-callback stream copying-info-free)
   (pa-start-stream stream)
+  ;; need to figure out the "right" way to do this. Start with something crude:
   ;; some way to signal this directly? ... AH! use stream-finished-callback?
   (sleep (* frames (/ 1 sample-rate)))
-  (extract-recorded-sound copying-info))|#
+  (let loop ()
+    (when (pa-stream-active? stream)
+      (sleep 0.5)
+      (loop)))
+  (extract-recorded-sound copying-info))
 
 

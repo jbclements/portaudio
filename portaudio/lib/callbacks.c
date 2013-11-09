@@ -120,13 +120,13 @@ int copyingCallbackRec(
     bytesToCopy = SAMPLEBYTES * (ri->numSamples - ri->curSample);
     memcpy((void *)copyBegin,input,bytesToCopy);
     ri->curSample = ri->numSamples;
-
+ 
     return(paComplete);
 
   } else {
     // this is not the last chunk. 
     bytesToCopy = SAMPLEBYTES * samplesToCopy;
-    memcpy((void *)copyBegin,output,bytesToCopy);
+    memcpy((void *)copyBegin,input,bytesToCopy);
     ri->curSample = nextCurSample;
     return(paContinue);
   }
