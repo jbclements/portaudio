@@ -1,2 +1,8 @@
-This repo is split off from the RSound repo; it contains just the bindings
-for the portaudio library.
+This repository provides bindings for the portable audio library 'portaudio'
+for the Racket language. It started life as part of the 'rsound' library.
+
+Install it using
+
+```sh
+raco pkg install portaudio
+```
