@@ -3,6 +3,6 @@ for the Racket language. It started life as part of the 'rsound' library.
 
 Install it using
 
-```sh
+```
 raco pkg install portaudio
 ```
