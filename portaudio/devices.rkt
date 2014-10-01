@@ -13,7 +13,8 @@
           [host-api (parameter/c (or/c false? symbol?))]
           [output-device (parameter/c (or/c false? nat?))]
           [find-output-device (-> number? nat?)]
-          [device-low-output-latency (-> nat? number?)]))
+          [device-low-output-latency (-> nat? number?)]
+          [default-device-has-stereo-input? (-> void?)]))
 
 ;; can't put contract on it, or can't use in teaching languages:
 (provide set-host-api!
@@ -178,3 +179,9 @@
             (pa-device-info-name device-info)
             (pa-device-info-max-input-channels device-info)
             (pa-device-info-max-output-channels device-info))))
+
+;; check that the default input device has at least two channels of input
+(define (default-device-has-stereo-input?)
+  (define i (pa-get-default-input-device))
+  (define device-info (pa-get-device-info i))
+  (>= (pa-device-info-max-input-channels device-info) 2))

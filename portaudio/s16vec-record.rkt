@@ -6,8 +6,6 @@
          "portaudio.rkt"
          "callback-support.rkt")
 
-;; CODE IN PROGRESS! NOT CURRENTLY WORKING!
-
 ;; this module provides a function that records a sound.
 
 (define nat? exact-nonnegative-integer?)
@@ -22,6 +20,9 @@
   (pa-maybe-initialize)
   (define copying-info (make-copying-info/rec frames))
   (define sr/i (exact->inexact sample-rate))
+  (unless (default-device-has-stereo-input?)
+    (error 's16vec-record
+           "default input device does not support two-channel input"))
   (define stream
     (pa-open-default-stream
      2             ;; input channels
@@ -29,7 +30,7 @@
      'paInt16      ;; sample format
      sr/i          ;; sample rate
      0             ;;frames-per-buffer
-     copying-callback/rec ;; callback (NULL means just wait for data)
+     copying-callback/rec ;; callback
      copying-info))
   ;;(pa-set-stream-finished-callback stream copying-info-free)
   (pa-start-stream stream)
@@ -38,7 +39,7 @@
   (sleep (* frames (/ 1 sample-rate)))
   (let loop ()
     (when (pa-stream-active? stream)
-      (sleep 0.5)
+      (sleep 0.4)
       (loop)))
   (extract-recorded-sound copying-info))
 

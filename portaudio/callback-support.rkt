@@ -41,7 +41,6 @@
   [make-copying-info/rec (c-> nat? cpointer?)]
   ;; the raw pointer to the copying callback, for use with
   ;; a sndplay record:
-  ;; NOT IMPLEMENTED YET
   [copying-callback/rec cpointer?]
   ;; produce an s16vector from the given copying-info
   [extract-recorded-sound (c-> cpointer? s16vector?)]

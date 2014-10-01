@@ -88,7 +88,7 @@ int copyingCallback(
     return(paComplete);
 
   } else {
-    // this is not the last chunk. 
+    // this is not the last chunk.
     bytesToCopy = SAMPLEBYTES * samplesToCopy;
     memcpy(output,(void *)copyBegin,bytesToCopy);
     ri->curSample = nextCurSample;
@@ -96,7 +96,6 @@ int copyingCallback(
   }
 }
 
-// EXPERIMENTAL, NOT COMPLETELY IMPLEMENTED YET:
 // simplest possible feeder; copy bytes until you run out.
 // assumes 16-bit ints, 2 channels.
 int copyingCallbackRec(
@@ -120,11 +119,11 @@ int copyingCallbackRec(
     bytesToCopy = SAMPLEBYTES * (ri->numSamples - ri->curSample);
     memcpy((void *)copyBegin,input,bytesToCopy);
     ri->curSample = ri->numSamples;
- 
+
     return(paComplete);
 
   } else {
-    // this is not the last chunk. 
+    // this is not the last chunk.
     bytesToCopy = SAMPLEBYTES * samplesToCopy;
     memcpy((void *)copyBegin,input,bytesToCopy);
     ri->curSample = nextCurSample;
@@ -144,7 +143,9 @@ int streamingCallback(
   soundStreamInfo *ssi = (soundStreamInfo *)userData;
 
   unsigned int lastFrameRequested = ssi->lastFrameRead + frameCount;
-  unsigned int lastFrameToCopy = MYMAX(ssi->lastFrameRead,MYMIN(lastFrameRequested,ssi->lastFrameWritten));
+  unsigned int lastFrameToCopy = MYMAX(ssi->lastFrameRead,
+                                       MYMIN(lastFrameRequested,
+                                             ssi->lastFrameWritten));
   unsigned int framesToCopy = lastFrameToCopy - ssi->lastFrameRead;
   unsigned int bytesToCopy = FRAMES_TO_BYTES(framesToCopy);
   unsigned int lastOffsetToCopy = ssi->lastOffsetRead + bytesToCopy;
@@ -187,15 +188,12 @@ void freeCopyingInfo(soundCopyingInfo *ri){
 // clean up a streamingInfo record when done.
 void freeStreamingInfo(soundStreamInfo *ssi){
 
-  // actually, I see a race condition here;
-  // I think the all_done should be set to 1 *before*
-  // the free.  I can't bear to recompile on windows, though....
-  free(ssi->buffer);
   // when all_done is 1, this triggers racket to call PaClose on the stream.
   // note that we're not mutating the structure here,
   // but rather a cell that it points to, so it will
   // survive the free(ssi).
   *(ssi->all_done) = 1;
+  free(ssi->buffer);
   free(ssi);
 }
 
@@ -205,5 +203,5 @@ void freeStreamingInfo(soundStreamInfo *ssi){
 // sound info blocks are associated
 // with the same library.
 void *dll_malloc(size_t bytes){
-	return malloc(bytes);
+  return malloc(bytes);
 }

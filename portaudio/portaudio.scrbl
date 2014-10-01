@@ -74,8 +74,23 @@ device" error from Portaudio.
 
 To address these issues, Portaudio 
 includes a number of functions used to control the selection
-of the host API. Using these functions should not be necessary on
-Mac OS X.
+of the host API.
+
+@defproc[(pa-maybe-initialize) void?]{
+ Initialize portaudio if it's not already initialized.
+ Not necessary for the vast majority of the higher-level
+ calls documented below.}
+
+@defproc[(pa-initialized?) boolean]{
+ Is portaudio initialized?}
+
+@defproc[(pa-terminate-completely) void?]{
+ Call pa-terminate repeatedly until @racket[(pa-initialized?)] 
+ returns @racket[false].}
+
+@defproc[(display-device-table) void?]{
+ Prints out salient information about the devices (currently)
+ available to portaudio.}
 
 @defproc[(default-host-api) symbol?]{
  Returns the default API for the platform.}
