@@ -4,6 +4,7 @@
          ffi/unsafe
          (rename-in racket/contract [-> c->])
          "portaudio.rkt"
+         "devices.rkt"
          "callback-support.rkt")
 
 ;; this module provides a function that records a sound.

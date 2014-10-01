@@ -14,7 +14,7 @@
           [output-device (parameter/c (or/c false? nat?))]
           [find-output-device (-> number? nat?)]
           [device-low-output-latency (-> nat? number?)]
-          [default-device-has-stereo-input? (-> void?)]))
+          [default-device-has-stereo-input? (-> boolean?)]))
 
 ;; can't put contract on it, or can't use in teaching languages:
 (provide set-host-api!
