@@ -34,16 +34,16 @@ typedef struct soundStreamInfo{
   unsigned long bufferFrames;
   char *buffer;
 
-  // only mutated by C (er... I believe?)
-  unsigned int lastFrameRead;
-  unsigned int lastOffsetRead;
+  // only mutated by C, after initial setup.
+  unsigned long lastFrameRead;
+  unsigned long lastOffsetRead;
+  unsigned int faultCount;
+  int   *all_done;
 
   // only mutated by Racket
-  unsigned int lastFrameWritten;
-  unsigned int lastOffsetWritten;
+  unsigned long lastFrameWritten;
+  unsigned long lastOffsetWritten;
 
-  int   faultCount;
-  int   *all_done;
 } soundStreamInfo;
 
 #define CHANNELS 2
