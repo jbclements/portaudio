@@ -26,10 +26,17 @@
 ;; before playing them, and you can't synchronize them accurately
 ;; (e.g., play one after the other so they sound seamless).
 
+;; all of these functions assume 2-channel-interleaved 16-bit input:
+(define CHANNELS 2)
+(define SAMPLE-BITS 16)
+(define s16max (sub1 (expt 2 (sub1 SAMPLE-BITS))))
+(define SAMPLE-BYTES (/ SAMPLE-BITS 8))
+
+
 (provide
  (contract-out
   ;; make a sndplay record for playing a precomputed sound.
-  [make-copying-info (c-> s16vector? nat? (or/c false? nat?) cpointer?)]
+  [make-copying-info (c-> s16vector? frame? (or/c false? frame?) cpointer?)]
   ;; the raw pointer to the copying callback, for use with
   ;; a sndplay record:
   [copying-callback cpointer?]
@@ -38,7 +45,7 @@
   ;; the free function callable from racket
   
   ;; make a sndplay record for recording a precomputed sound.
-  [make-copying-info/rec (c-> nat? cpointer?)]
+  [make-copying-info/rec (c-> frame? cpointer?)]
   ;; the raw pointer to the copying callback, for use with
   ;; a sndplay record:
   [copying-callback/rec cpointer?]
@@ -46,7 +53,7 @@
   [extract-recorded-sound (c-> cpointer? s16vector?)]
   
   ;; make a streamplay record for playing a stream.
-  [make-streaming-info (c-> integer? (list/c cpointer? cpointer?))]
+  [make-streaming-info (c-> frame? (list/c cpointer? cpointer?))]
   ;; is the stream all done?
   [all-done? (c-> cpointer? boolean?)]
   ;; call the given procedure with the buffers to be filled:
@@ -58,11 +65,74 @@
   ;; buffer provided in time by racket)?
   [stream-fails (c-> cpointer? integer?)]
   ;; the free function for a streaming callback
-  [streaming-info-free cpointer?]))
+  [streaming-info-free cpointer?]
+  
+  ;; is this a legitimate argument for a 'frames' ?
+  [frame? (c-> any/c boolean?)]))
 
-(define (frames? n)
-  (and (exact-integer? n)
-       (<= 0 n)))
+;; check the correspondence between C types and racket types.
+(define correspondences
+  (list (list _uint 'int)
+        (list _sint16 'short)
+        (list _ulong 'long)))
+
+;; check that they match. If they don't, then the Racket code
+;; and the C code won't agree about the sizes of fields that
+;; they're sharing. Core dumps ensue?
+(for ([c correspondences])
+  (unless (= (ctype-sizeof (car c))
+             (compiler-sizeof (cadr c)))
+    (error 'type-correspondence 
+           "ctype ~v and C type ~v don't have the same size"
+           (car c)
+           (cadr c))))
+
+(unless (= 2 (compiler-sizeof 'short))
+  (error 'type-correspondence "compiler's 'short' is not 16 bits."))
+
+
+;; thinking about overflow: we're interacting with C code here, and
+;; bad things will happen if our indexes overflow. Let's set some
+;; "plausibility" limits.
+;; MAXIMUM PLAUSIBLE # OF CHANNELS: 8.
+(define MINIMUM-PLAUSIBLE-CHANNELS 1)
+(define MAXIMUM-PLAUSIBLE-CHANNELS 8)
+;; MAXIMUM SOUND BUFFER: 1 Gigabyte (or, more precisely, 1 Gibibyte).
+(define MAXIMUM-BUFSIZE (expt 2 30))
+(define MINIMUM-FRAMESIZE (* MINIMUM-PLAUSIBLE-CHANNELS
+                                       SAMPLE-BYTES))
+(define MAXIMUM-FRAMES (/ MAXIMUM-BUFSIZE
+                                    MINIMUM-FRAMESIZE))
+
+;; to represent frame counts and buffer offsets, we're going
+;; to use unsigned longs:
+(define MAXIMUM-ULONG (expt 2 (* 8 (ctype-sizeof _ulong))))
+
+;; make sure that a _ulong can represent a number of frames:
+(unless (<= MAXIMUM-FRAMES MAXIMUM-ULONG)
+  (error "ulong is not large enough to handle the longest possible sound"))
+;; make sure that a _ulong can represent a sample offset:
+(unless (<= MAXIMUM-BUFSIZE MAXIMUM-ULONG)
+  (error "ulong is not large enough to handle the longest possible sound"))
+
+;; we should be able to handle sounds at least this long:
+(define MAXIMUM-SOUND-LENGTH-SECONDS 3600)
+(define MAXIMUM-PLAUSIBLE-SAMPLE-RATE 96000)
+
+(unless (<= (* MAXIMUM-SOUND-LENGTH-SECONDS MAXIMUM-PLAUSIBLE-SAMPLE-RATE)
+            MAXIMUM-FRAMES)
+  (error "can't accommodate long enough sounds"))
+
+;; looks like we're okay. If we want to bump the sample size up to 4 or 
+;; 8, we'll need to 
+
+
+(unless (integer? SAMPLE-BYTES)
+  (error 'portaudio "SAMPLE-BITS must be divisible by 8"))
+
+(define (frame? n)
+  (and (exact-nonnegative-integer? n)
+       (<= n MAXIMUM-FRAMES)))
 
 (define nat? exact-nonnegative-integer?)
 (define false? not)
@@ -75,28 +145,26 @@
          set-stream-rec-last-offset-written!
          )
 
-;; all of these functions assume 2-channel-interleaved 16-bit input:
-(define channels 2)
-(define s16max 32767)
-(define sample-bytes (ctype-sizeof _sint16))
 
-(define (frames->bytes f) (* channels (samples->bytes f)))
+(define (frames->bytes f) (* CHANNELS (samples->bytes f)))
 ;; this should never be a non-integer. Typed racket would help here.
-(define (bytes->frames b) (/ b (* channels sample-bytes)))
-(define (samples->bytes f) (* sample-bytes f))
+(define (bytes->frames b) (/ b (* CHANNELS SAMPLE-BYTES)))
+(define (samples->bytes f) (* SAMPLE-BYTES f))
 
 ;; COPYING CALLBACK STRUCT ... we can use this for recording, too.
 (define-cstruct _copying
   ([sound         _pointer]
    [cur-sample    _ulong]
-   [num-samples   _ulong]))
+   [num-samples   _ulong]
+   ;; not yet used...
+   [channels      _uint]))
 
 ;; create a fresh copying structure, including a full
 ;; malloc'ed copy of the sound data. No sanity checking of start
 ;; & stop is done.
 (define (make-copying-info s16vec start-frame maybe-stop-frame)
   (define stop-frame (or maybe-stop-frame
-                         (/ (s16vector-length s16vec) channels)))
+                         (/ (s16vector-length s16vec) CHANNELS)))
   (define frames-to-copy (- stop-frame start-frame))
   ;; do this allocation first: it's much bigger, and more likely to fail:
   (define copied-sound (dll-malloc (frames->bytes frames-to-copy)))
@@ -108,7 +176,8 @@
                              _copying-pointer))
   (set-copying-sound! copying copied-sound)
   (set-copying-cur-sample! copying 0)
-  (set-copying-num-samples! copying (* frames-to-copy channels))
+  (set-copying-num-samples! copying (* frames-to-copy CHANNELS))
+  (set-copying-channels! copying CHANNELS)
   copying)
 
 (define (make-copying-info/rec frames)
@@ -119,7 +188,8 @@
                              _copying-pointer))
   (set-copying-sound! copying record-buffer)
   (set-copying-cur-sample! copying 0)
-  (set-copying-num-samples! copying (* frames channels))
+  (set-copying-num-samples! copying (* frames CHANNELS))
+  (set-copying-channels! copying CHANNELS)
   copying)
 
 ;; pull the recorded sound out of a copying structure.  This function
@@ -256,7 +326,7 @@
    _bogus-struct-pointer
    _pa-stream-callback))
 
-;; the callback for recording sounds (not working yet....)
+;; the callback for recording sounds
 (define copying-callback/rec
   (cast
    (get-ffi-obj "copyingCallbackRec" callbacks-lib _bogus-struct)
@@ -404,6 +474,4 @@
                    (check-equal? (s16vector-ref src-vec i)
                                  (s16vector-ref result i)))
                  
-                 )))
-  
-  )
+                 ))))
