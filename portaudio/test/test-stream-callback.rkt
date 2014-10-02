@@ -22,26 +22,32 @@
   (define callback-lib
     (ffi-lib (build-path libs (system-library-subpath) "callbacks")))
   
+  ;; COPIED FROM CALLBACK-SUPPORT.RKT
   (define-cstruct _stream-rec
   (;; the number of frames in the circular buffer
-   [buffer-frames _int]
+   [buffer-frames _ulong]
    ;; the circular buffer
    [buffer _pointer]
+   
+   ;; mutated only by the C side:
    ;; the last frame read by the callback
-   [last-frame-read _uint]
+   [last-frame-read _ulong]
    ;; the offset of the last byte read by the callback.
-   [last-offset-read _uint]
-   ;; the last frame written by Racket
-   [last-frame-written _uint]
-   ;; the offset of the last byte written by Racket.
-   [last-offset-written _uint]
+   [last-offset-read _ulong]
    ;; number of faults:
-   [fault-count _int]
+   [fault-count _uint]
    ;; a pointer to a 4-byte cell; when it's nonzero,
    ;; the supplying procedure should shut down, and
    ;; free this cell. If it doesn't get freed, well,
-   ;; that's four bytes wasted forever.
-   [all-done _pointer]))
+   ;; that's four bytes wasted until the next store-prompt.
+   [all-done _pointer]
+   
+   ;; mutated only by Racket:
+   ;; the last frame written by Racket
+   [last-frame-written _ulong]
+   ;; the offset of the last byte written by Racket.
+   [last-offset-written _ulong]
+))
   
   (define streaming-callback
     (get-ffi-obj "streamingCallback"
