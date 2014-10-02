@@ -137,7 +137,7 @@
 
 (define-cstruct _stream-rec
   (;; the number of frames in the circular buffer
-   [buffer-frames _int]
+   [buffer-frames _ulong]
    ;; the circular buffer
    [buffer _pointer]
    ;; the last frame read by the callback

@@ -30,7 +30,8 @@ typedef struct soundCopyingInfo{
 } soundCopyingInfo;
 
 typedef struct soundStreamInfo{
-  unsigned int   bufferFrames;
+  // not mutated at all
+  unsigned long bufferFrames;
   char *buffer;
 
   // only mutated by C (er... I believe?)
