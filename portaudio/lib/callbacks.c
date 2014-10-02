@@ -6,10 +6,11 @@
 // This file provides callbacks suitable for passing to
 // portaudio that can respond to portaudio requests for
 // data. There are three callbacks, the copyingCallback,
-// the only-partially-implemented copyingCallbackRec,
+// the copyingCallbackRec,
 // and the streamingCallback.  The first one is for
 // playing sounds that are completely pre-rendered
-// in a buffer, and the third is for playing sounds
+// in a buffer, the second is for recording sounds into a pre-allocated
+// buffer, and the third is for playing sounds
 // that are being generated on the fly. The difference
 // between the two is that the streaming one has mutable fields
 // in its struct that allow two-way communication between
@@ -27,6 +28,7 @@ typedef struct soundCopyingInfo{
   short *sound;
   unsigned long curSample;
   unsigned long numSamples;
+  unsigned int channels;
 } soundCopyingInfo;
 
 typedef struct soundStreamInfo{
@@ -57,6 +59,11 @@ typedef struct soundStreamInfo{
 void freeCopyingInfo(soundCopyingInfo *ri);
 void freeStreamingInfo(soundStreamInfo *ssi);
 
+// convert a number of frames to a number of bytes:
+unsigned long frames_to_bytes(unsigned long frames, unsigned long channels){
+  return frames * channels * (SAMPLEBYTES);
+}
+
 // simplest possible feeder; copy bytes until you run out.
 // assumes 16-bit ints, 2 channels.
 // CALLS FREE ON THE SOUND AND THE RECORD WHEN FINISHED
@@ -82,7 +89,7 @@ int copyingCallback(
     memcpy(output,(void *)copyBegin,bytesToCopy);
     // zero out the rest of the buffer:
     zeroRegionBegin = (char *)output + bytesToCopy;
-    bytesToZero = FRAMES_TO_BYTES(frameCount) - bytesToCopy;
+    bytesToZero = frames_to_bytes(frameCount,CHANNELS) - bytesToCopy;
     memset(zeroRegionBegin,0,bytesToZero);
     ri->curSample = ri->numSamples;
 
@@ -148,9 +155,9 @@ int streamingCallback(
                                        MYMIN(lastFrameRequested,
                                              ssi->lastFrameWritten));
   unsigned int framesToCopy = lastFrameToCopy - ssi->lastFrameRead;
-  unsigned int bytesToCopy = FRAMES_TO_BYTES(framesToCopy);
+  unsigned int bytesToCopy = frames_to_bytes(framesToCopy,CHANNELS);
   unsigned int lastOffsetToCopy = ssi->lastOffsetRead + bytesToCopy;
-  unsigned int bufferBytes = FRAMES_TO_BYTES(ssi->bufferFrames);
+  unsigned int bufferBytes = frames_to_bytes(ssi->bufferFrames,CHANNELS);
   // stupid windows. I bet there's some way to get around this restriction.
   unsigned int bytesInEnd;
   unsigned int bytesAtBeginning;
@@ -167,13 +174,15 @@ int streamingCallback(
   }
   // fill the rest with zeros, if any:
   if (lastFrameToCopy < lastFrameRequested) {
-    memset((void *)((char *)output+bytesToCopy),0,FRAMES_TO_BYTES(lastFrameRequested - lastFrameToCopy));
+    memset((void *)((char *)output+bytesToCopy),0,
+           frames_to_bytes(lastFrameRequested - lastFrameToCopy, CHANNELS));
     ssi->faultCount += 1;
   }
   // update record. Advance to the desired point, even
   // if it wasn't available.
   ssi->lastFrameRead = lastFrameRequested;
-  ssi->lastOffsetRead = (ssi->lastOffsetRead + FRAMES_TO_BYTES(frameCount)) % bufferBytes;
+  ssi->lastOffsetRead = (ssi->lastOffsetRead +
+                         frames_to_bytes(frameCount, CHANNELS)) % bufferBytes;
 
   return(paContinue);
 
