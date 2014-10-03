@@ -11,22 +11,26 @@
 
 (define nat? exact-nonnegative-integer?)
 
-(provide/contract [s16vec-record (c-> nat? integer? s16vector?)])
+(provide/contract [s16vec-record (c-> frame? integer? nat? s16vector?)])
 
 (define channels 2)
 
 ;; given a number of frames and a sample rate, record the sound
 ;; and return it. Blocks!
-(define (s16vec-record frames sample-rate)
+(define (s16vec-record frames sample-rate channels)
   (pa-maybe-initialize)
-  (define copying-info (make-copying-info/rec frames))
+  (define available-channels (default-input-device-channels))
+  (unless (<= channels available-channels)
+    (raise-argument-error 's16vec-record
+                          (format "number <= number of available input channels (~a)"
+                                  (default-input-device-channels))
+                          2 frames sample-rate channels))
+  (define copying-info (make-copying-info/rec frames channels))
   (define sr/i (exact->inexact sample-rate))
-  (unless (default-device-has-stereo-input?)
-    (error 's16vec-record
-           "default input device does not support two-channel input"))
+  
   (define stream
     (pa-open-default-stream
-     2             ;; input channels
+     channels      ;; input channels
      0             ;; output channels
      'paInt16      ;; sample format
      sr/i          ;; sample rate

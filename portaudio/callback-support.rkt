@@ -45,7 +45,7 @@
   ;; the free function callable from racket
   
   ;; make a sndplay record for recording a precomputed sound.
-  [make-copying-info/rec (c-> frame? cpointer?)]
+  [make-copying-info/rec (c-> frame? nat? cpointer?)]
   ;; the raw pointer to the copying callback, for use with
   ;; a sndplay record:
   [copying-callback/rec cpointer?]
@@ -146,9 +146,9 @@
          )
 
 
-(define (frames->bytes f) (* CHANNELS (samples->bytes f)))
+(define (frames->bytes f channels) (* channels (samples->bytes f)))
 ;; this should never be a non-integer. Typed racket would help here.
-(define (bytes->frames b) (/ b (* CHANNELS SAMPLE-BYTES)))
+(define (bytes->frames b channels) (/ b (* channels SAMPLE-BYTES)))
 (define (samples->bytes f) (* SAMPLE-BYTES f))
 
 ;; COPYING CALLBACK STRUCT ... we can use this for recording, too.
@@ -167,10 +167,13 @@
                          (/ (s16vector-length s16vec) CHANNELS)))
   (define frames-to-copy (- stop-frame start-frame))
   ;; do this allocation first: it's much bigger, and more likely to fail:
-  (define copied-sound (dll-malloc (frames->bytes frames-to-copy)))
+  (define copied-sound (dll-malloc (frames->bytes frames-to-copy
+                                                  CHANNELS)))
   (define src-ptr (ptr-add (s16vector->cpointer s16vec)
-                           (frames->bytes start-frame)))
-  (memcpy copied-sound src-ptr (frames->bytes frames-to-copy))
+                           (frames->bytes start-frame
+                                          CHANNELS)))
+  (memcpy copied-sound src-ptr (frames->bytes frames-to-copy
+                                              CHANNELS))
   (define copying (cast (dll-malloc (ctype-sizeof _copying))
                              _pointer
                              _copying-pointer))
@@ -180,16 +183,16 @@
   (set-copying-channels! copying CHANNELS)
   copying)
 
-(define (make-copying-info/rec frames)
+(define (make-copying-info/rec frames channels)
   ;; do this allocation first: it's much bigger, and more likely to fail:
-  (define record-buffer (dll-malloc (frames->bytes frames)))
+  (define record-buffer (dll-malloc (frames->bytes frames channels)))
   (define copying (cast (dll-malloc (ctype-sizeof _copying))
                              _pointer
                              _copying-pointer))
   (set-copying-sound! copying record-buffer)
   (set-copying-cur-sample! copying 0)
-  (set-copying-num-samples! copying (* frames CHANNELS))
-  (set-copying-channels! copying CHANNELS)
+  (set-copying-num-samples! copying (* frames channels))
+  (set-copying-channels! copying channels)
   copying)
 
 ;; pull the recorded sound out of a copying structure.  This function
@@ -247,7 +250,8 @@
                      _pointer
                      _stream-rec-pointer))
   (set-stream-rec-buffer-frames! info buffer-frames)
-  (set-stream-rec-buffer! info (dll-malloc (frames->bytes buffer-frames)))
+  (set-stream-rec-buffer! info (dll-malloc (frames->bytes buffer-frames
+                                                          CHANNELS)))
   (set-stream-rec-last-frame-read! info 0)
   (set-stream-rec-last-offset-read! info 0)
   (set-stream-rec-last-frame-written! info 0)
@@ -273,7 +277,8 @@
 (define (call-buffer-filler stream-info filler)
   (define buffer (stream-rec-buffer stream-info))
   (define buffer-frames (stream-rec-buffer-frames stream-info))
-  (define buffer-bytes (frames->bytes buffer-frames))
+  (define buffer-bytes (frames->bytes buffer-frames
+                                      CHANNELS))
 
   ;; the potential race condition here has no "major" bad effects, I believe:
   (define last-frame-read (stream-rec-last-frame-read stream-info))
@@ -295,11 +300,13 @@
     ;; do we have to wrap around?
     (cond [(<= last-offset-to-write first-offset-to-write)
            (define frames-to-end 
-             (bytes->frames (- buffer-bytes first-offset-to-write)))
+             (bytes->frames (- buffer-bytes first-offset-to-write)
+                            CHANNELS))
            (filler (ptr-add buffer first-offset-to-write)
                    frames-to-end)
            (filler buffer
-                   (bytes->frames last-offset-to-write))]
+                   (bytes->frames last-offset-to-write
+                                  CHANNELS))]
           [else
            (filler (ptr-add buffer first-offset-to-write)
                    (- last-frame-to-write first-frame-to-write))])
