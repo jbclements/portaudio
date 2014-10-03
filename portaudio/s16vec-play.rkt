@@ -20,13 +20,12 @@
 ;; there's an unacceptable 1/2-second lag in starting
 ;; a new place.
 
-(define channels 2)
 (define reasonable-latency 0.1)
 
 ;; given an s16vec, a starting frame, a stopping frame or 
 ;; false, and a sample rate, play the sound.
 (define (s16vec-play s16vec start-frame pre-stop-frame sample-rate)
-  (define total-frames (/ (s16vector-length s16vec) channels))
+  (define total-frames (/ (s16vector-length s16vec) CHANNELS))
   (define stop-frame (or pre-stop-frame
                         total-frames))
   (check-args s16vec total-frames start-frame stop-frame)
@@ -39,7 +38,7 @@
   (define output-stream-parameters
     (make-pa-stream-parameters
      device-number ;; device
-     2             ;; channels
+     CHANNELS      ;; channels
      '(paInt16)    ;; sample format
      device-latency ;; latency
      #f))            ;; host-specific info

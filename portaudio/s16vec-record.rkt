@@ -11,9 +11,15 @@
 
 (define nat? exact-nonnegative-integer?)
 
-(provide/contract [s16vec-record (c-> frame? integer? nat? s16vector?)])
+;; don't know how to extract other #s of channels into rsound. Lift
+;; this restriction if rsounds get generalized to arbitrary #s of
+;; channels.
+(define channels? (lambda (x) (or (= x 1) (= x 2))))
 
-(define channels 2)
+
+(provide/contract [s16vec-record (c-> frame? integer? channels? s16vector?)])
+
+
 
 ;; given a number of frames and a sample rate, record the sound
 ;; and return it. Blocks!
@@ -44,7 +50,7 @@
   (sleep (* frames (/ 1 sample-rate)))
   (let loop ()
     (when (pa-stream-active? stream)
-      (sleep 0.4)
+      (sleep 0.1)
       (loop)))
   (extract-recorded-sound copying-info))
 

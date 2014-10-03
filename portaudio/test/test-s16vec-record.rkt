@@ -18,10 +18,11 @@
   
   (define s2 (s16vec-record 1000 44100 1))
   
-  (check-equal? (s16vector-length s2) (* 1000 1))
+  (check-equal? (s16vector-length s2) (* 1000 2))
   
   (check-exn (lambda (exn)
-               (regexp-match (regexp-quote "number of available input channels")
+               (regexp-match (regexp-quote
+                              "expected: channels?")
                              (exn-message exn)))
              (lambda ()
                (s16vec-record 1000 44100 10)))
