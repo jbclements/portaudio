@@ -14,7 +14,7 @@
           [output-device (parameter/c (or/c false? nat?))]
           [find-output-device (-> number? nat?)]
           [device-low-output-latency (-> nat? number?)]
-          [default-device-has-stereo-input? (-> boolean?)]))
+          [default-input-device-channels (-> nat?)]))
 
 ;; can't put contract on it, or can't use in teaching languages:
 (provide set-host-api!
@@ -180,8 +180,9 @@
             (pa-device-info-max-input-channels device-info)
             (pa-device-info-max-output-channels device-info))))
 
-;; check that the default input device has at least two channels of input
-(define (default-device-has-stereo-input?)
+;; returns the number of input channels available for the default
+;; input device
+(define (default-input-device-channels)
   (define i (pa-get-default-input-device))
   (define device-info (pa-get-device-info i))
-  (>= (pa-device-info-max-input-channels device-info) 2))
+  (pa-device-info-max-input-channels device-info))
