@@ -28,6 +28,7 @@ typedef struct soundCopyingInfo{
   short *sound;
   unsigned long curSample;
   unsigned long numSamples;
+  // channels only used for recording, for now:
   unsigned int channels;
 } soundCopyingInfo;
 
@@ -114,8 +115,9 @@ int copyingCallbackRec(
     void *userData ) {
 
   soundCopyingInfo *ri = (soundCopyingInfo *)userData;
+  unsigned int channels = ri->channels;
   short *copyBegin = ri->sound + ri->curSample;
-  unsigned long samplesToCopy = frameCount * CHANNELS;
+  unsigned long samplesToCopy = frameCount * channels;
   unsigned long nextCurSample = ri->curSample + samplesToCopy;
   // !@#$ windows makes me declare them at the top of the function:
   size_t bytesToCopy;
