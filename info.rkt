@@ -1,7 +1,7 @@
 #lang setup/infotab
 
 (define collection 'multi)
-(define version "0.1") ; version bump for add of s16vec-record
+(define version "1.0.1") ; version bump for small API change
 
 (define deps
   (list "base"))

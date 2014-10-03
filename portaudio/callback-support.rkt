@@ -5,7 +5,7 @@
          (rename-in racket/contract [-> c->])
          racket/runtime-path
          "portaudio.rkt"
-         (only-in racket/match match-define))
+         (only-in racket/match match-define match))
 
 (define-runtime-path lib "lib/")
 
@@ -68,7 +68,9 @@
   [streaming-info-free cpointer?]
   
   ;; is this a legitimate argument for a 'frames' ?
-  [frame? (c-> any/c boolean?)]))
+  [frame? (c-> any/c boolean?)]
+  
+  [CHANNELS nat?]))
 
 ;; check the correspondence between C types and racket types.
 (define correspondences
@@ -184,6 +186,13 @@
   copying)
 
 (define (make-copying-info/rec frames channels)
+  ;; this restriction is only here because extract-recorded-sound
+  ;; will (currently) fail for more than 2 channels.
+  (unless (or (= channels 1)
+              (= channels 2))
+    (raise-argument-error 'make-copying-info/rec
+                          "number in {1,2}"
+                          1 frames channels))
   ;; do this allocation first: it's much bigger, and more likely to fail:
   (define record-buffer (dll-malloc (frames->bytes frames channels)))
   (define copying (cast (dll-malloc (ctype-sizeof _copying))
@@ -198,10 +207,18 @@
 ;; pull the recorded sound out of a copying structure.  This function
 ;; does not guarantee that the sound has been completely recorded yet.
 (define (extract-recorded-sound copying)
-  (define num-samples (copying-num-samples copying))
-  (define s16vec (make-s16vector num-samples))
+  (define num-in-samples (copying-num-samples copying))
+  (unless (= CHANNELS 2)
+    (error 'extract-recorded-sound 
+           "internal error---time to edit this code 201410030924"))
+  (define num-out-samples 
+    (match (copying-channels copying)
+      [1 (* num-in-samples CHANNELS)]
+      [2 num-in-samples]))
+  (define s16vec (make-s16vector num-out-samples))
   (define dst-ptr (s16vector->cpointer s16vec))
-  (memcpy dst-ptr (copying-sound copying) (samples->bytes num-samples))
+  ;; broken for 1-channel, needs duplication:
+  (memcpy dst-ptr (copying-sound copying) (samples->bytes num-out-samples))
   s16vec)
 
 ;; ... how to make sure that it doesn't get freed before it's copied out?
@@ -390,95 +407,96 @@
   
   (provide the-test-suite)
   (define the-test-suite
-   (test-suite "copying callbacks"
-               (let ()
-                 
-                 ;; create a bogus source vector with noise:
-                 (define src-vec (make-s16vector 2048))
-                 (for ([i (in-range 2048)])
-                   (s16vector-set! src-vec i (random-s16)))
-                 
-                 (define offset-frame 436)
-                 (define offset-sample (* 2 offset-frame))
-                 (define remaining-samples (- 2048 offset-sample))
-                 
-                 ;; create a copying info, make sure it's correct:
-                 (define copying (make-copying-info src-vec offset-frame #f))
-                 (check-equal? (copying-cur-sample copying) 0)
-                 (check-equal? (copying-num-samples copying) (- 2048 offset-sample))
-                 (define copied-buf-ptr (copying-sound copying))
-                 (for ([i (in-range remaining-samples)])
-                   (check-equal? (s16vector-ref src-vec (+ i offset-sample))
-                                 (ptr-ref copied-buf-ptr _sint16 i)))
-                 
-                 
-                 ;; use the copying-callback to put it into another buffer.
-                 
-                 ;; target buffer:
-                 (define dst-ptr (malloc _sint16 1024))
-                 
-                 
-                 
-                 (copying-callback #f dst-ptr 512 #f '() copying)
-                 (for ([i (in-range 1024)])
-                   (check-equal? (s16vector-ref src-vec (+ i offset-sample))
-                                 (ptr-ref dst-ptr _sint16 i)))
-                 (check-equal? (copying-cur-sample copying) 1024)
-                 
-                 (copying-callback #f dst-ptr 512 #f '() copying)
-                 (for ([i (in-range (* 2 (- 512 offset-frame)))])
-                   (check-equal? (s16vector-ref src-vec (+ i 1024 offset-sample))
-                                 (ptr-ref dst-ptr _sint16 i)))
-                 (for ([i (in-range offset-frame)])
-                   (check-equal? (ptr-ref dst-ptr _sint16 (+ i (- 1024 (* 2 offset-frame))))
-                                 0))
-                 (check-equal? (copying-cur-sample copying) (- 2048 (* 2 offset-frame)))
-                 )
-               
-               (let ()
-                 ;; try again with recording callback:
-                 
-                 ;; create a bogus source vector with noise:
-                 (define src-vec (make-s16vector 2048))
-                 (for ([i (in-range 2048)])
-                   (s16vector-set! src-vec i (random-s16)))
-                 (check-equal? (ptr-ref (cast src-vec _s16vector _pointer) _sint16 17)
-                               (s16vector-ref src-vec 17))
-                 
-                 (define offset-frame 436)
-                 (define offset-sample (* 2 offset-frame))
-                 (define remaining-samples (- 2048 offset-sample))
-                 
-                 ;; create a copying info, make sure it's correct:
-                 (define copying (make-copying-info/rec (/ remaining-samples 2)))
-                 (check-equal? (copying-cur-sample copying) 0)
-                 (check-equal? (copying-num-samples copying) (- 2048 offset-sample))
-                 
-                 ;; use the copying-callback to put it into another buffer.
-                 
-                 
-                 (copying-callback-rec (cast src-vec
-                                             _s16vector
-                                             _pointer)
-                                       #f 512 #f '() copying)
-                 (check-equal? (copying-cur-sample copying) 1024)
-                 
-                 (copying-callback-rec (ptr-add
-                                        (cast src-vec
-                                              _s16vector
-                                              _pointer)
-                                        2048)
-                                       #f 512 #f '() copying)
-                 (check-equal? (copying-cur-sample copying) (- 2048 offset-sample))
-                 
-                 (define dst-ptr (copying-sound copying))
-                 (for ([i (in-range (* 2 (- 1024 offset-frame)))])
-                   (check-equal? (s16vector-ref src-vec i)
-                                 (ptr-ref dst-ptr _sint16 i)))
-                 
-                 (define result (extract-recorded-sound copying))
-                 (for ([i (in-range (* 2 (- 1024 offset-frame)))])
-                   (check-equal? (s16vector-ref src-vec i)
-                                 (s16vector-ref result i)))
-                 
-                 ))))
+    (test-suite 
+     "copying callbacks"
+     (let ()
+       
+       ;; create a bogus source vector with noise:
+       (define src-vec (make-s16vector 2048))
+       (for ([i (in-range 2048)])
+         (s16vector-set! src-vec i (random-s16)))
+       
+       (define offset-frame 436)
+       (define offset-sample (* 2 offset-frame))
+       (define remaining-samples (- 2048 offset-sample))
+       
+       ;; create a copying info, make sure it's correct:
+       (define copying (make-copying-info src-vec offset-frame #f))
+       (check-equal? (copying-cur-sample copying) 0)
+       (check-equal? (copying-num-samples copying) (- 2048 offset-sample))
+       (define copied-buf-ptr (copying-sound copying))
+       (for ([i (in-range remaining-samples)])
+         (check-equal? (s16vector-ref src-vec (+ i offset-sample))
+                       (ptr-ref copied-buf-ptr _sint16 i)))
+       
+       
+       ;; use the copying-callback to put it into another buffer.
+       
+       ;; target buffer:
+       (define dst-ptr (malloc _sint16 1024))
+       
+       
+       
+       (copying-callback #f dst-ptr 512 #f '() copying)
+       (for ([i (in-range 1024)])
+         (check-equal? (s16vector-ref src-vec (+ i offset-sample))
+                       (ptr-ref dst-ptr _sint16 i)))
+       (check-equal? (copying-cur-sample copying) 1024)
+       
+       (copying-callback #f dst-ptr 512 #f '() copying)
+       (for ([i (in-range (* 2 (- 512 offset-frame)))])
+         (check-equal? (s16vector-ref src-vec (+ i 1024 offset-sample))
+                       (ptr-ref dst-ptr _sint16 i)))
+       (for ([i (in-range offset-frame)])
+         (check-equal? (ptr-ref dst-ptr _sint16 (+ i (- 1024 (* 2 offset-frame))))
+                       0))
+       (check-equal? (copying-cur-sample copying) (- 2048 (* 2 offset-frame)))
+       )
+     
+     (let ()
+       ;; try again with recording callback:
+       
+       ;; create a bogus source vector with noise:
+       (define src-vec (make-s16vector 2048))
+       (for ([i (in-range 2048)])
+         (s16vector-set! src-vec i (random-s16)))
+       (check-equal? (ptr-ref (cast src-vec _s16vector _pointer) _sint16 17)
+                     (s16vector-ref src-vec 17))
+       
+       (define offset-frame 436)
+       (define offset-sample (* 2 offset-frame))
+       (define remaining-samples (- 2048 offset-sample))
+       
+       ;; create a copying info, make sure it's correct:
+       (define copying (make-copying-info/rec (/ remaining-samples 2)))
+       (check-equal? (copying-cur-sample copying) 0)
+       (check-equal? (copying-num-samples copying) (- 2048 offset-sample))
+       
+       ;; use the copying-callback to put it into another buffer.
+       
+       
+       (copying-callback-rec (cast src-vec
+                                   _s16vector
+                                   _pointer)
+                             #f 512 #f '() copying)
+       (check-equal? (copying-cur-sample copying) 1024)
+       
+       (copying-callback-rec (ptr-add
+                              (cast src-vec
+                                    _s16vector
+                                    _pointer)
+                              2048)
+                             #f 512 #f '() copying)
+       (check-equal? (copying-cur-sample copying) (- 2048 offset-sample))
+       
+       (define dst-ptr (copying-sound copying))
+       (for ([i (in-range (* 2 (- 1024 offset-frame)))])
+         (check-equal? (s16vector-ref src-vec i)
+                       (ptr-ref dst-ptr _sint16 i)))
+       
+       (define result (extract-recorded-sound copying))
+       (for ([i (in-range (* 2 (- 1024 offset-frame)))])
+         (check-equal? (s16vector-ref src-vec i)
+                       (s16vector-ref result i)))
+       
+       ))))
