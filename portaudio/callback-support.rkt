@@ -26,7 +26,8 @@
 ;; before playing them, and you can't synchronize them accurately
 ;; (e.g., play one after the other so they sound seamless).
 
-;; all of these functions assume 2-channel-interleaved 16-bit input:
+;; all of these functions except s16vec-record assume 
+;; 2-channel-interleaved 16-bit input:
 (define CHANNELS 2)
 (define SAMPLE-BITS 16)
 (define s16max (sub1 (expt 2 (sub1 SAMPLE-BITS))))
@@ -211,17 +212,34 @@
   (unless (= CHANNELS 2)
     (error 'extract-recorded-sound 
            "internal error---time to edit this code 201410030924"))
-  (define num-out-samples 
-    (match (copying-channels copying)
-      [1 (* num-in-samples CHANNELS)]
-      [2 num-in-samples]))
-  (define s16vec (make-s16vector num-out-samples))
+  (define recorded-channels (copying-channels copying))
+  ;; it would save memory in the case of monaural recording to 
+  ;; use unsafe operations to dupliate the bits as they're being
+  ;; copied, but I think the added chance of core dumps is
+  ;; not worth the memory savings.
+  (define num-out-samples num-in-samples)
+  (define s16vec (make-s16vector num-in-samples))
+  (define src-ptr (copying-sound copying))
   (define dst-ptr (s16vector->cpointer s16vec))
-  ;; broken for 1-channel, needs duplication:
-  (memcpy dst-ptr (copying-sound copying) (samples->bytes num-out-samples))
-  s16vec)
+  (memcpy dst-ptr src-ptr (samples->bytes num-out-samples))
+  (match recorded-channels
+    [2 s16vec]
+    [1 (duplicate-channels s16vec)]))
 
 ;; ... how to make sure that it doesn't get freed before it's copied out?
+
+
+;; turn mono into stereo by duplicating every sample, e.g.
+;; 0.4 0.2 0.8 -0.2 -> 0.4 0.4 0.2 0.2 0.8 0.8 -0.2 -0.2
+(define (duplicate-channels s16vec)
+  (define result (make-s16vector (* 2 (s16vector-length s16vec))))
+  (for ([i (s16vector-length s16vec)])
+    (define sample (s16vector-ref s16vec i))
+    (s16vector-set! result (* 2 i)        sample)
+    (s16vector-set! result (add1 (* 2 i)) sample))
+  result)
+
+
 
 ;; STREAMING CALLBACK STRUCT
 
@@ -468,9 +486,10 @@
        (define remaining-samples (- 2048 offset-sample))
        
        ;; create a copying info, make sure it's correct:
-       (define copying (make-copying-info/rec (/ remaining-samples 2)))
+       (define copying (make-copying-info/rec (/ remaining-samples 2) 2))
        (check-equal? (copying-cur-sample copying) 0)
        (check-equal? (copying-num-samples copying) (- 2048 offset-sample))
+       (check-equal? (copying-channels copying) 2)
        
        ;; use the copying-callback to put it into another buffer.
        
@@ -498,5 +517,9 @@
        (for ([i (in-range (* 2 (- 1024 offset-frame)))])
          (check-equal? (s16vector-ref src-vec i)
                        (s16vector-ref result i)))
+       
+       (define testvec (list->s16vector '(3 28 1 2 9)))
+       (check-equal? (s16vector->list (duplicate-channels testvec))
+                     '(3 3 28 28 1 1 2 2 9 9))
        
        ))))
