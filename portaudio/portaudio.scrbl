@@ -45,7 +45,7 @@
  then, playing multiple sounds at once requires adding them all to 
  one stream. This solution also has the advantage of substantially 
  lower latency. The RSound library provides support for this, in
- the form of its @racket[play/s] function.
+ the form of its @racket[pstream] abstraction.
  
  My ability to test on different platforms is limited; I'm always 
  eager to hear about successes and failures that people experience
@@ -157,7 +157,6 @@ to call this for sounds that are really big (> 100MB?).
 (s16vec-play vec 0 88200 sample-rate)
 }|}
 
-
 @section{Playing Streams}
 
 @defproc[(stream-play [buffer-filler (-> buffer-setter? nat? nat? void?)] 
@@ -229,6 +228,16 @@ put up with the occasional miss in return for lower latency.
  speeds (currently ~5x) than the current vector operations.
  
  }
+
+@section{Recording Sounds}
+
+This library also provides a high-level interface for recording sounds
+of a fixed length.
+
+@defproc[(s16vec-record [frame frame?] [frame-rate integer?] [num-channels channels?]) s16vector?]{
+ Record a sound of the given number of frames, at the specified frame rate, of the specified
+ number of channels. Returns an s16vector containing interleaved samples. Signals an error
+ if the default input device does not allow that many channels.}
 
 @section{A Note on Memory, Synchronization, and Concurrency}
 
