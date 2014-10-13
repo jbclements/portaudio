@@ -148,7 +148,7 @@
 #ifndef PORTAUDIO_H
 #define PORTAUDIO_H
 /*
- * $Id: portaudio.h 1745 2011-08-25 17:44:01Z rossb $
+ * $Id: portaudio.h 1859 2012-09-01 00:10:13Z philburk $
  * PortAudio Portable Real-Time Audio Library
  * PortAudio API Header File
  * Latest version available at: http://www.portaudio.com/
@@ -1208,11 +1208,10 @@ typedef enum PaStreamCallbackResult
  @param frameCount The number of sample frames to be processed by
  the stream callback.
 
- @param timeInfo The time in seconds when the first sample of the input
- buffer was received at the audio input, the time in seconds when the first
- sample of the output buffer will begin being played at the audio output, and
- the time in seconds when the stream callback was called.
- See also Pa_GetStreamTime()
+ @param timeInfo Timestamps indicating the ADC capture time of the first sample
+ in the input buffer, the DAC output time of the first sample in the output buffer
+ and the time the callback was invoked. 
+ See PaStreamCallbackTimeInfo and Pa_GetStreamTime()
 
  @param statusFlags Flags indicating whether input and/or output buffers
  have been inserted or will be dropped to overcome underflow or overflow
@@ -1671,7 +1670,7 @@ typedef struct PaStreamInfo
 /** Retrieve a pointer to a PaStreamInfo structure containing information
  about the specified stream.
  @return A pointer to an immutable PaStreamInfo structure. If the stream
- parameter invalid, or an error is encountered, the function returns NULL.
+ parameter is invalid, or an error is encountered, the function returns NULL.
 
  @param stream A pointer to an open stream previously created with Pa_OpenStream.
 
