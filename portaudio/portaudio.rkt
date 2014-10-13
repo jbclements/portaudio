@@ -90,6 +90,8 @@
              (raise-argument-error name-as-symbol "not-yet-closed stream" 0 stream))
            (name2 stream)))]))
 
+;; another convenience abstraction; this one unwraps the stream before
+;; calling the second function
 (define-syntax (define-stream-ptr-fun stx)
   (syntax-parse stx
     [(_ name1:id name2:id)
@@ -1492,6 +1494,8 @@ PaError Pa_SetStreamFinishedCallback( PaStream *stream, PaStreamFinishedCallback
   (unless (stream? stream)
     (raise-argument-error 'pa-set-stream-finished-callback 
                           "stream" 0 stream callback))
+  (unless (not (unbox (stream-closed?-box stream)))
+    (raise-argument-error 'pa-set-stream-finished-callback "not-yet-closed stream" 0 stream callback))
   (pa-set-stream-finished-callback/raw (stream-ptr stream) callback))
 
 (define-checked pa-set-stream-finished-callback/raw
@@ -1783,7 +1787,12 @@ PaError Pa_ReadStream( PaStream* stream,
 
 ;; *** UNTESTED ***:
 
-(define-stream-ptr-fun pa-read-stream pa-read-stream/raw)
+(define (pa-read-stream stream buffer frames)
+  (unless (stream? stream)
+    (raise-argument-error 'pa-read-stream "stream" 0 stream buffer frames))
+  (unless (not (unbox (stream-closed?-box stream)))
+    (raise-argument-error 'pa-read-stream "not-yet-closed stream" 0 stream buffer frames))
+  (pa-read-stream/raw (stream-ptr stream) buffer frames))
 
 (define-checked pa-read-stream/raw
   (get-ffi-obj "Pa_ReadStream"
@@ -1819,10 +1828,11 @@ PaError Pa_WriteStream( PaStream* stream,
                         unsigned long frames );
 |#
 
+;; *** UNTESTED ***
 (define (pa-write-stream stream buffer frames)
   (unless (stream? stream)
     (raise-argument-error 'pa-write-stream "stream" 0 stream buffer frames))
-  (pa-write-stream/raw stream buffer frames))
+  (pa-write-stream/raw (stream-ptr stream) buffer frames))
 
 (define-checked pa-write-stream/raw
   (get-ffi-obj "Pa_WriteStream"
