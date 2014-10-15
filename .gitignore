@@ -3,3 +3,4 @@ compiled
 *.o
 doc
 planet-docs
+*.bak

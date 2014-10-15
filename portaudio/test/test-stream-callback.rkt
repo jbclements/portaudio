@@ -82,7 +82,7 @@
   
   (define buffer-bytes (* 2 channels buffer-frames))
   
-  ;; buffer-not ready yet:
+  ;; buffer-not ready yet (frames written still zero):
   (set-stream-rec-last-frame-read! stream-info 7000)
   (set-stream-rec-last-offset-read! stream-info (modulo (* 4 7000) buffer-bytes))
   (check-equal? (streaming-callback
