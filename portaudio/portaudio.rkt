@@ -1430,8 +1430,6 @@ PaError Pa_CloseStream( PaStream *stream );
   (when (semaphore-try-wait? (stream-sema stream))
     (stream-counter-put! 'close)
     (define the-ptr (stream-ptr stream))
-    ;; setting this to #f just turns normal-looking errors
-    ;; into segfaults....
     (set-box! (stream-closed?-box stream) #t)
     (remove-managed the-ptr)
     ;; bizarrely, calling stop-stream prevents some kind of 
