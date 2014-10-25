@@ -1397,7 +1397,12 @@ PaError Pa_OpenDefaultStream( PaStream** stream,
                           ['paNoError  
                            (begin (stream-counter-put! 'open)
                                   (define wrapped-result (make-stream result))
-                                  (add-managed wrapped-result
+                                  ;; this is causing crashes. For the moment, I'm
+                                  ;; commenting this out. This *will* result in 
+                                  ;; a GC leak, but for playback streams with 50ms buffers, 
+                                  ;; we'll leak on the order of 8K per abandoned stream.
+                                  ;; Still makes me sad. Grr.
+                                  #;(add-managed wrapped-result
                                                close-stream-callback)
                                   wrapped-result)]
                           [other (error 'pa-open-default-stream "~a" 
