@@ -1327,7 +1327,7 @@ PaError Pa_OpenStream( PaStream** stream,
                      _double ;; sampleRate
                      _ulong ;; framesPerBuffer
                      _pa-stream-flags ;; streamFlags
-                     _pa-stream-callback ;; callback (ptr to C fun)
+                     _pa-stream-callback/null ;; callback (ptr to C fun)
                      _pointer ;; userData
                      -> (err : _pa-error)
                      -> (match err
