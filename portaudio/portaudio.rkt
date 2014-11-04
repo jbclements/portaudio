@@ -1334,7 +1334,12 @@ PaError Pa_OpenStream( PaStream** stream,
                           ['paNoError
                            (begin (stream-counter-put! 'open)
                                   (define wrapped-result (make-stream result))
-                                  (add-managed wrapped-result
+                                  ;; this is causing crashes. For the moment, I'm
+                                  ;; commenting this out. This *will* result in 
+                                  ;; a GC leak, but for playback streams with 50ms buffers, 
+                                  ;; we'll leak on the order of 8K per abandoned stream.
+                                  ;; Still makes me sad. Grr.
+                                  #;(add-managed wrapped-result
                                                close-stream-callback)
                                   wrapped-result)]
                           [other (error 'pa-open-stream "~a" 
@@ -1436,7 +1441,8 @@ PaError Pa_CloseStream( PaStream *stream );
     (stream-counter-put! 'close)
     (define the-ptr (stream-ptr stream))
     (set-box! (stream-closed?-box stream) #t)
-    (remove-managed the-ptr)
+    ;; commented out along with the add-managed
+    #;(remove-managed the-ptr)
     ;; bizarrely, calling stop-stream prevents some kind of 
     ;; deadlock here. I'm guessing that 
     ;; the abort-stream that otherwise happens as part of 
@@ -1928,12 +1934,12 @@ void Pa_Sleep( long msec );
 ;; SUPPORT:
 
 ;; import add-managed so that we can associate streams with custodians:
-(define add-managed
+#;(define add-managed
  (get-ffi-obj "scheme_add_managed" #f
              (_fun (_pointer = #f) _racket _fpointer (_pointer = #f) (_int = 1) -> _pointer)))
 
 ;; import remove-managed so that we can detach streams from custodians:
-(define remove-managed
+#;(define remove-managed
  (get-ffi-obj "scheme_remove_managed" #f
              (_fun (_pointer = #f) _racket -> _void)))
 
