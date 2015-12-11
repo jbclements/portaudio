@@ -35,7 +35,9 @@
                                 stats/c
                                 sound-killer/c))])
 
-(define channels 2)
+;; NB: changing this without looking at the rest of portaudio (& rsound)
+;; will almost certainly break things and crash DrRacket.
+(define CHANNELS 2)
 
 ;; we insist on an engine with latency at least this low:
 (define reasonable-latency 0.05)
@@ -44,7 +46,8 @@
 
 ;; given a buffer-filler (unsafe) and a frame length and a sample rate,
 ;; starts a stream, using the buffer-filler to provide data as
-;; needed.
+;; needed. This function may use a longer buffer if the chosen one is
+;; too short.
 (define (stream-play/unsafe buffer-filler buffer-time sample-rate)
   (pa-maybe-initialize)
   (define chosen-device (find-output-device reasonable-latency))
@@ -92,10 +95,10 @@
   (list stream-time stats stopper))
 
 ;; the safe version checks the index of each sample before it's 
-;; used in a ptr-set!
+;; used in a ptr-set!, but is otherwise a wrapper for stream-play/unsafe
 (define (stream-play safe-buffer-filler buffer-time sample-rate)
   (define buffer-frames (buffer-time->frames buffer-time sample-rate))
-  (define buffer-samples (* channels buffer-frames))
+  (define buffer-samples (* CHANNELS buffer-frames))
   (define (check-sample-idx sample-idx)
     (unless (<= 0 sample-idx (sub1 buffer-samples))
       (error 'check-sample-idx 
@@ -124,7 +127,7 @@
   (define output-stream-parameters
     (make-pa-stream-parameters
      device-number ;; device
-     2             ;; channels
+     CHANNELS      ;; channels
      '(paInt16)    ;; sample format
      latency       ;; latency
      #f))            ;; host-specific info

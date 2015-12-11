@@ -167,6 +167,9 @@ to call this for sounds that are really big (> 100MB?).
  rate, starts playing a stream that uses the given callback to supply data.
  The buffer-filler receives two arguments: a procedure that can be used
  to mutate the buffer, and the length of the buffer in frames.
+
+ Note that the buffer length may be longer than the specified length, if the
+ provided length is too short for the chosen device.
  
  The function returns a list containing three functions: one that queries the
  stream for a time in seconds, one that returns statistics about the stream, 
