@@ -24,9 +24,10 @@
 
 (define libportaudio
   (case (system-type)
-    [(windows) (ffi-lib win-dll-path)]
-    [(macosx)  (with-handlers ()
-                 (ffi-lib mac-dll-path '("2" "")))]
+    [(windows) (or (ffi-lib win-dll-path #:fail (λ () #f))
+                   (ffi-lib "portaudio"))]
+    [(macosx)  (or (ffi-lib mac-dll-path '("2" "") #:fail (λ () #f))
+                   (ffi-lib "libportaudio" '("2" "")))]
     [(unix)    (with-handlers 
                    ([exn:fail? 
                      (lambda (exn)
