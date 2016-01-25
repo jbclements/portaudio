@@ -234,9 +234,13 @@
 
 
 ;; the library containing the C copying callbacks
-(define callbacks-lib (ffi-lib (build-path lib
-                                           (system-library-subpath)
-                                           "callbacks")))
+(define callbacks-lib (or (ffi-lib (build-path lib
+                                               (system-library-subpath)
+                                               "callbacks")
+                                   #:fail (λ () #f))
+                          ;; also look in "standard locations". useful
+                          ;; for people building executables.
+                          (ffi-lib "callbacks")))
 
 ;; in order to get a raw pointer to pass back to C, we declare 
 ;; the function pointers as being simple structs:
