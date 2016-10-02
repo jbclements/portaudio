@@ -46,6 +46,14 @@
  one stream. This solution also has the advantage of substantially 
  lower latency. The RSound library provides support for this, in
  the form of its @racket[pstream] abstraction.
+
+ Also note that different platforms are more or less friendly to
+ various sample rates. Portaudio itself (both the library and this
+ package) are sample-rate-agnostic, and appear to work just fine
+ for different sample rates. Most of the automated tests on portaudio
+ use the classical "red book" CD sample rate of 44.1KHz, but some
+ Windows audio devices only support 48KHz, and this appears to work
+ fine with Portaudio.
  
  My ability to test on different platforms is limited; I'm always 
  eager to hear about successes and failures that people experience
@@ -68,7 +76,7 @@ high.
 
 The WASAPI API (if that's not redundant) has its own issues; in 
 particular, it seems to be necessary to manually set the playback device
-to the right sample rate (for rsound, typically 44100Hz) before 
+to the right sample rate (often 44100Hz) before 
 starting DrRacket.  Failing to do so simply results in an "invalid
 device" error from Portaudio.
 

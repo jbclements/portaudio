@@ -77,7 +77,6 @@
 
 ;; all of these functions assume 2-channel-interleaved 16-bit input:
 (define channels 2)
-(define s16max 32767)
 (define sample-bytes (ctype-sizeof _sint16))
 
 (define (frames->bytes f) (* channels (samples->bytes f)))
