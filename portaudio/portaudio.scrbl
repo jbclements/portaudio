@@ -167,7 +167,7 @@ to call this for sounds that are really big (> 100MB?).
 
 @section{Playing Streams}
 
-@defproc[(stream-play [buffer-filler (-> buffer-setter? nat? nat? void?)] 
+@defproc[(stream-play [buffer-filler (-> buffer-setter? nat? void?)] 
                       [buffer-time nonnegative-real?] 
                       [sample-rate nonnegative-real?])
          (list/c (-> real?) (-> (list-of (list/c symbol? number?)))(-> void?))]{
