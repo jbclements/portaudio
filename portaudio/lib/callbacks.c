@@ -56,15 +56,21 @@ typedef struct soundStreamInfo{
 void freeCopyingInfo(soundCopyingInfo *ri);
 void freeStreamingInfo(soundStreamInfo *ssi);
 
-// simplest possible feeder; copy bytes until you run out.
+// this is a callback that plays sound from a fixed buffer.
+// note that this callback's interface is fixed by portaudio.
 // assumes 16-bit ints, 2 channels.
-// CALLS FREE ON THE SOUND AND THE RECORD WHEN FINISHED
+
+// NB: the only effect of this callback is to copy bytes from
+// one buffer to another. No allocation or freeing takes place.
 int copyingCallback(
-    const void *input, void *output,
-    unsigned long frameCount,
-    const PaStreamCallbackTimeInfo* timeInfo,
-    PaStreamCallbackFlags statusFlags,
-    void *userData ) {
+    const void *input, // pointer to input sounds : unused here
+    void *output, // the buffer to copy into
+    unsigned long frameCount, // the number of frames to copy
+    const PaStreamCallbackTimeInfo* timeInfo, // info on time
+    PaStreamCallbackFlags statusFlags, // info on status
+    void *userData ) // the userdata from racket (containing
+  // the actual sound to be played)
+{
 
   soundCopyingInfo *ri = (soundCopyingInfo *)userData;
   short *copyBegin = ri->sound + ri->curSample;
@@ -76,7 +82,8 @@ int copyingCallback(
   size_t bytesToZero;
 
   if (ri->numSamples <= nextCurSample) {
-    // this is the last chunk.
+    // request is for more samples than the rest of the sound.
+    // Therefore, this is the last chunk.
     bytesToCopy = SAMPLEBYTES * (ri->numSamples - ri->curSample);
     memcpy(output,(void *)copyBegin,bytesToCopy);
     // zero out the rest of the buffer:
@@ -84,7 +91,6 @@ int copyingCallback(
     bytesToZero = FRAMES_TO_BYTES(frameCount) - bytesToCopy;
     memset(zeroRegionBegin,0,bytesToZero);
     ri->curSample = ri->numSamples;
-
     return(paComplete);
 
   } else {
@@ -96,8 +102,14 @@ int copyingCallback(
   }
 }
 
-// simplest possible feeder; copy bytes until you run out.
+// this is a recording callback. I believe it works for some
+// sets of inputs, but I don't believe it works in general.
+// for one thing, it records a fixed duration sound.
+
 // assumes 16-bit ints, 2 channels.
+
+// NB: the only effect of this callback is to copy bytes from
+// one buffer to another. No allocation or freeing takes place.
 int copyingCallbackRec(
     const void *input, void *output,
     unsigned long frameCount,
@@ -119,7 +131,6 @@ int copyingCallbackRec(
     bytesToCopy = SAMPLEBYTES * (ri->numSamples - ri->curSample);
     memcpy((void *)copyBegin,input,bytesToCopy);
     ri->curSample = ri->numSamples;
-
     return(paComplete);
 
   } else {
@@ -131,8 +142,14 @@ int copyingCallbackRec(
   }
 }
 
+// this is a streaming callback, to be used with sounds
+// that are being generated as they're being played back.
 
-// copy buffers to the output buffer (if they're available)
+// the interface here is fixed by portaudio. See comments above about
+// meanings of input arguments.
+
+// NB: the only effect of this callback is to copy bytes from
+// one buffer to another. No allocation or freeing takes place.
 int streamingCallback(
     const void *input, void *output,
     unsigned long frameCount,
@@ -185,9 +202,9 @@ void freeCopyingInfo(soundCopyingInfo *ri){
   free(ri);
 }
 
-// clean up a streamingInfo record when done.
+// clean up a streamingInfo record when done, sets a cell used to indicate
+// the stream can be freed
 void freeStreamingInfo(soundStreamInfo *ssi){
-
   // when all_done is 1, this triggers racket to call PaClose on the stream.
   // note that we're not mutating the structure here,
   // but rather a cell that it points to, so it will

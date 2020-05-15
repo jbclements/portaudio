@@ -14,20 +14,30 @@
 
 (provide (all-defined-out))
 
-(define-runtime-path lib-path "lib")
-;; use local copies of the libraries for Windows & Mac...
-(define win-dll-path (build-path lib-path (system-library-subpath) "portaudio"))
-(define mac-dll-path (build-path lib-path "libportaudio"))
 
 (define linux-err-msg
   "Note: on Linux, you need to install the libportaudio library yourself. Underlying error message: ~a")
 
 (define libportaudio
   (case (system-type)
-    [(windows) (or (ffi-lib win-dll-path #:fail (λ () #f))
-                   (ffi-lib "portaudio"))]
-    [(macosx)  (or (ffi-lib mac-dll-path '("2" "") #:fail (λ () #f))
-                   (ffi-lib "libportaudio" '("2" "")))]
+    [(windows)
+     (define lib-path
+       (collection-file-path "libportaudio.dll" "portaudio" "lib"))
+     (cond [(file-exists? lib-path)
+            (define-values (dir filename must-be-dir?) (split-path lib-path))
+            (ffi-lib (build-path dir "libportaudio"))]
+           [else
+            ;; give up, try system lib dirs
+            (ffi-lib "libportaudio")])]
+    [(macosx)
+     (define lib-path
+       (collection-file-path "libportaudio.2.dylib" "portaudio" "lib"))
+     (cond [(file-exists? lib-path)
+            (define-values (dir filename must-be-dir?) (split-path lib-path))
+            (ffi-lib (build-path dir "libportaudio") '("2"))]
+           [else
+            ;; give up, try system lib dirs
+            (ffi-lib "libportaudio" '("2" ""))])]
     [(unix)    (with-handlers 
                    ([exn:fail? 
                      (lambda (exn)

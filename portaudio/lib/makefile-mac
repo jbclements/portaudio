@@ -1,18 +1,17 @@
-all : i386 x86_64
+all : x86_64
 
-i386 : i386-macosx/3m/callbacks.dylib
+BCTGT = x86_64-macosx/3m
+CSTGT = x86_64-macosx/cs
+FLAGS =  -arch x86_64 -mmacosx-version-min=10.5
 
-i386-macosx/3m/callbacks.dylib : i386-macosx/3m/callbacks.o
-	raco ctool -d i386-macosx/3m --ld callbacks.dylib ++ldf -arch ++ldf i386 ++ldf -mmacosx-version-min=10.5 i386-macosx/3m/callbacks.o
+x86_64 : $(BCTGT)/callbacks.dylib $(CSTGT)/callbacks.dylib
 
-i386-macosx/3m/callbacks.o : callbacks.c
-	raco ctool -d i386-macosx/3m --cc ++ccf -arch ++ccf i386 ++ccf -mmacosx-version-min=10.5 callbacks.c
+$(CSTGT)/callbacks.dylib : $(CSTGT)/callbacks.o
+	gcc -o $(CSTGT)/callbacks.dylib -dynamiclib $(FLAGS) $(CSTGT)/callbacks.o
 
-x86_64 : x86_64-macosx/3m/callbacks.dylib
+$(CSTGT)/callbacks.o : callbacks.c
+	gcc -c -o $(CSTGT)/callbacks.o $(FLAGS) callbacks.c
 
-x86_64-macosx/3m/callbacks.dylib : x86_64-macosx/3m/callbacks.o
-	raco ctool -d x86_64-macosx/3m --ld callbacks.dylib ++ldf -arch ++ldf x86_64 ++ldf -mmacosx-version-min=10.5 x86_64-macosx/3m/callbacks.o
-
-x86_64-macosx/3m/callbacks.o : callbacks.c
-	raco ctool -d x86_64-macosx/3m --cc ++ccf -arch ++ccf x86_64 ++ccf -mmacosx-version-min=10.5 callbacks.c
-
+# they're just the same, copy the file across:
+$(BCTGT)/callbacks.dylib : $(CSTGT)/callbacks.dylib
+	cp $(CSTGT)/callbacks.dylib $(BCTGT)/callbacks.dylib

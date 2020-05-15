@@ -233,13 +233,17 @@
 
 
 ;; the library containing the C copying callbacks
-(define callbacks-lib (or (ffi-lib (build-path lib
-                                               (system-library-subpath)
-                                               "callbacks")
-                                   #:fail (λ () #f))
-                          ;; also look in "standard locations". useful
-                          ;; for people building executables.
-                          (ffi-lib "callbacks")))
+(define callbacks-lib
+  (let ()
+    (define lib-path
+      (collection-file-path "callbacks.dylib" "portaudio" "lib"))
+    (cond [(file-exists? lib-path)
+           (define-values (dir filename must-be-dir?) (split-path lib-path))
+           (ffi-lib (build-path dir "callbacks"))]
+          [else
+           ;; also look in "standard locations". useful
+           ;; for people building executables.
+           (ffi-lib "callbacks")])))
 
 ;; in order to get a raw pointer to pass back to C, we declare 
 ;; the function pointers as being simple structs:

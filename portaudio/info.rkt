@@ -11,15 +11,13 @@
 
 (define scribblings '(("portaudio.scrbl" () (tool))))
 (define categories '(media))
-(define version "2012-10-13-12:44")
-(define release-notes '((p "improved windows host api handling, "
-                           "bugfixes")))
+(define version "2020-05-13")
+(define release-notes '((p "moving dylibs to other packages")))
 (define compile-omit-paths '("test"))
+
+
 
 ;; planet-specific:
 (define repositories '("4.x"))
 (define primary-file "main.rkt")
-
-#;(define homepage "http://schematics.sourceforge.net/")
-#;(define url "http://schematics.sourceforge.net/")
 
