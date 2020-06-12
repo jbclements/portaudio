@@ -1,7 +1,7 @@
 #lang setup/infotab
 
 (define collection 'multi)
-(define version "2020-05-29")
+(define version "0.2")
 
 (define deps
   '("base"
