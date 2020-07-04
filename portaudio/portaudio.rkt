@@ -6,7 +6,8 @@
 ;; there are a few utility functions at the bottom that are used in
 ;; order to manage things a bit.
 
-(require ffi/unsafe
+(require setup/collection-search
+         ffi/unsafe
          racket/runtime-path
          racket/match
          (for-syntax racket/base syntax/parse)
@@ -16,35 +17,32 @@
 
 
 (define linux-err-msg
-  "Note: on Linux, you need to install the libportaudio library yourself. Underlying error message: ~a")
+  "Note: on Linux/unix, you need to install the libportaudio library yourself. Underlying error message: ~a")
 
+(define not-false? (λ (x) x))
+(define portaudio-version-strings '("2" "2.0.0" #f))
 (define libportaudio
-  (case (system-type)
-    [(windows)
-     (define lib-path
-       (collection-file-path "libportaudio.dll" "portaudio" "lib"))
-     (cond [(file-exists? lib-path)
-            (define-values (dir filename must-be-dir?) (split-path lib-path))
-            (ffi-lib (build-path dir "libportaudio"))]
-           [else
-            ;; give up, try system lib dirs
-            (ffi-lib "libportaudio")])]
-    [(macosx)
-     (define lib-path
-       (collection-file-path "libportaudio.2.dylib" "portaudio" "lib"))
-     (cond [(file-exists? lib-path)
-            (define-values (dir filename must-be-dir?) (split-path lib-path))
-            (ffi-lib (build-path dir "libportaudio") '("2"))]
-           [else
-            ;; give up, try system lib dirs
-            (ffi-lib "libportaudio" '("2" ""))])]
-    [(unix)    (with-handlers 
-                   ([exn:fail? 
-                     (lambda (exn)
-                       (error 'rsound 
-                               linux-err-msg
-                              (exn-message exn)))])
-                 (ffi-lib "libportaudio" '("2.0.0" "")))]))
+  (with-handlers
+      ([exn:fail?
+        (lambda (exn)
+          (cond
+            [(equal? (system-type) 'unix)
+             (error 'rsound
+                    linux-err-msg
+                    (exn-message exn))]
+            [else
+             (raise exn)]))])
+    (or
+     (collection-search
+      '(lib "portaudio/lib")
+      #:combine
+      (λ (_ path)
+        (ffi-lib (build-path path "libportaudio")
+                 portaudio-version-strings
+                 #:fail (λ () #f)))
+      #:break?
+      not-false?)
+     (ffi-lib "libportaudio" portaudio-version-strings))))
 
 ;; wrap a function to signal an error when an error code is returned.
 ;; (any ... -> pa-error) -> (any ... -> )

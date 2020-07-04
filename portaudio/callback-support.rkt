@@ -1,13 +1,12 @@
 #lang racket/base
 
-(require ffi/vector
+(require setup/collection-search
+         ffi/vector
          ffi/unsafe
          (rename-in racket/contract [-> c->])
          racket/runtime-path
          "portaudio.rkt"
          (only-in racket/match match-define))
-
-(define-runtime-path lib "lib/")
 
 ;; this module provides an intermediate layer between 
 ;; the raw C primitives of portaudio and the higher-level
@@ -231,19 +230,24 @@
 
 ;; FFI OBJECTS FROM THE C CALLBACK LIBRARY
 
+(define not-false? (λ (x) x))
 
 ;; the library containing the C copying callbacks
 (define callbacks-lib
   (let ()
-    (define lib-path
-      (collection-file-path "callbacks.dylib" "portaudio" "lib"))
-    (cond [(file-exists? lib-path)
-           (define-values (dir filename must-be-dir?) (split-path lib-path))
-           (ffi-lib (build-path dir "callbacks"))]
-          [else
-           ;; also look in "standard locations". useful
-           ;; for people building executables.
-           (ffi-lib "callbacks")])))
+    (or
+     ;; search in all portaudio/lib collection dirs:
+     (collection-search
+      '(lib "portaudio/lib")
+      #:combine
+      (λ (_ path)
+        (ffi-lib (build-path path "callbacks")
+                 #:fail (λ () #f)))
+      #:break?
+      not-false?)
+     ;; also look in "standard locations". useful
+     ;; for people building executables.
+     (ffi-lib "callbacks"))))
 
 ;; in order to get a raw pointer to pass back to C, we declare 
 ;; the function pointers as being simple structs:

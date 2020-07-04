@@ -6,8 +6,7 @@
 (define deps
   '("base"
     ("portaudio-x86_64-macosx" #:platform "x86_64-macosx")
-    ;; still working on this one...
-    ;("portaudio-win32-x86-64"  #:platform "win32\\x86_64")
+    ("portaudio-win32-x86-64"  #:platform "x86_64-win32")
     ))
 
 (define build-deps
