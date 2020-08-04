@@ -2,6 +2,7 @@
 
 (require "helpers.rkt"
          "../callback-support.rkt"
+         "../callbacks-lib.rkt"
          ffi/unsafe
          ffi/vector
          rackunit
@@ -19,33 +20,9 @@
 (test-suite "portaudio"
 (let ()
   
-  (define callback-lib
-    (ffi-lib (build-path libs (system-library-subpath) "callbacks")))
-  
-  (define-cstruct _stream-rec
-  (;; the number of frames in the circular buffer
-   [buffer-frames _int]
-   ;; the circular buffer
-   [buffer _pointer]
-   ;; the last frame read by the callback
-   [last-frame-read _uint]
-   ;; the offset of the last byte read by the callback.
-   [last-offset-read _uint]
-   ;; the last frame written by Racket
-   [last-frame-written _uint]
-   ;; the offset of the last byte written by Racket.
-   [last-offset-written _uint]
-   ;; number of faults:
-   [fault-count _int]
-   ;; a pointer to a 4-byte cell; when it's nonzero,
-   ;; the supplying procedure should shut down, and
-   ;; free this cell. If it doesn't get freed, well,
-   ;; that's four bytes wasted forever.
-   [all-done _pointer]))
-  
   (define streaming-callback
     (get-ffi-obj "streamingCallback"
-                 callback-lib
+                 callbacks-lib
                  (_fun 
                   (_pointer = #f)
                   _pointer

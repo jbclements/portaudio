@@ -16,10 +16,10 @@
   
   (check-equal? (* 1000 2) (s16vector-length s))
   
-  #:(define data (for/list ([p (s16vector->list s)]
+  (define data (for/list ([p (s16vector->list s)]
                           [i (in-naturals)])
                  (vector i p)))
-  #;(display (plot (points data)))
+  (display (plot (points data)))
   )))
 
 

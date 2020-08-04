@@ -1,11 +1,10 @@
 #lang racket/base
 
-(require setup/collection-search
-         ffi/vector
+(require ffi/vector
          ffi/unsafe
          (rename-in racket/contract [-> c->])
-         racket/runtime-path
          "portaudio.rkt"
+         "callbacks-lib.rkt"
          (only-in racket/match match-define))
 
 ;; this module provides an intermediate layer between 
@@ -131,28 +130,7 @@
 
 ;; ... how to make sure that it doesn't get freed before it's copied out?
 
-;; STREAMING CALLBACK STRUCT
 
-(define-cstruct _stream-rec
-  (;; the number of frames in the circular buffer
-   [buffer-frames _int]
-   ;; the circular buffer
-   [buffer _pointer]
-   ;; the last frame read by the callback
-   [last-frame-read _uint]
-   ;; the offset of the last byte read by the callback.
-   [last-offset-read _uint]
-   ;; the last frame written by Racket
-   [last-frame-written _uint]
-   ;; the offset of the last byte written by Racket.
-   [last-offset-written _uint]
-   ;; number of faults:
-   [fault-count _int]
-   ;; a pointer to a 4-byte cell; when it's nonzero,
-   ;; the supplying procedure should shut down, and
-   ;; free this cell. If it doesn't get freed, well,
-   ;; that's four bytes wasted until the next store-prompt.
-   [all-done _pointer]))
 
 
 ;; how many fails have occurred on the stream?
@@ -228,26 +206,6 @@
     (set-stream-rec-last-frame-written! stream-info last-frame-to-write)
     (set-stream-rec-last-offset-written! stream-info last-offset-to-write)))
 
-;; FFI OBJECTS FROM THE C CALLBACK LIBRARY
-
-(define not-false? (λ (x) x))
-
-;; the library containing the C copying callbacks
-(define callbacks-lib
-  (let ()
-    (or
-     ;; search in all portaudio/lib collection dirs:
-     (collection-search
-      '(lib "portaudio/lib")
-      #:combine
-      (λ (_ path)
-        (ffi-lib (build-path path "callbacks")
-                 #:fail (λ () #f)))
-      #:break?
-      not-false?)
-     ;; also look in "standard locations". useful
-     ;; for people building executables.
-     (ffi-lib "callbacks"))))
 
 ;; in order to get a raw pointer to pass back to C, we declare 
 ;; the function pointers as being simple structs:
