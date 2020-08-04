@@ -37,12 +37,16 @@
       '(lib "portaudio/lib")
       #:combine
       (λ (_ path)
-        (ffi-lib (build-path path "libportaudio")
-                 portaudio-version-strings
-                 #:fail (λ () #f)))
+        (or (ffi-lib (build-path path "libportaudio")
+                     portaudio-version-strings
+                     #:fail (λ () #f))
+            (ffi-lib (build-path path "portaudio")
+                     portaudio-version-strings
+                     #:fail (λ () #f))))
       #:break?
       not-false?)
-     (ffi-lib "libportaudio" portaudio-version-strings))))
+     (ffi-lib "libportaudio" portaudio-version-strings)
+     (ffi-lib "portaudio" portaudio-version-strings))))
 
 ;; wrap a function to signal an error when an error code is returned.
 ;; (any ... -> pa-error) -> (any ... -> )
