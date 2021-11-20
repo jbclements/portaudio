@@ -234,7 +234,9 @@ int Pa_GetVersion( void );
 */
 const char* Pa_GetVersionText( void );
 |#
-(define pa-get-version-text
+
+;; deprecated, removing:
+#;(define pa-get-version-text
     (get-ffi-obj "Pa_GetVersionText"
                  libportaudio
                  (_fun -> _string)))
@@ -277,6 +279,14 @@ typedef struct PaVersionInfo {
     const char *versionText;
 } PaVersionInfo;
 
+|#
+(define-cstruct _pa-version-info
+  ([version-major _int]
+   [version-minor _int]
+   [version-sub-minor _int]
+   [version-control-revision _string]
+   [version-text _string]))
+#|
 /** Retrieve version information for the currently running PortAudio build.
  @return A pointer to an immutable PaVersionInfo structure.
 
@@ -289,6 +299,12 @@ typedef struct PaVersionInfo {
 */
 const PaVersionInfo* Pa_GetVersionInfo( void );
 
+|#
+(define pa-get-version-info
+    (get-ffi-obj "Pa_GetVersionInfo"
+                 libportaudio
+                 (_fun -> _pa-version-info-pointer)))
+#|
 
 /** Error codes returned by PortAudio functions.
  Note that with the exception of paNoError, all PaErrorCodes are negative.

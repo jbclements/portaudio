@@ -14,7 +14,7 @@
 (let ()
   
   (check-not-exn (lambda () (pa-get-version)))
-  (check-not-exn (lambda () (pa-get-version-text)))
+  (check-not-exn (λ () (pa-get-version-info)))
   
   ;; this can change, as long as it's something sensible:
   (check-equal? (pa-get-error-text 'paBufferTooBig) "Buffer too big")
@@ -49,7 +49,7 @@
   (check-exn exn:fail? 
              (lambda () (pa-get-host-api-info (+ 14 (pa-get-host-api-count)))))
   
-  (printf "pa-version-text: ~s" (pa-get-version-text))
+  (printf "pa-version-info: ~v" (pa-get-version-info))
   (printf "devices available: ~s\n" (pa-get-device-count))
   (printf "info on available devices: ~s\n" (available-devices-info))
   (printf "default device: ~s\n" (default-device-info))
