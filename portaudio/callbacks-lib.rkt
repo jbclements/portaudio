@@ -16,19 +16,7 @@
 ;; the library containing the C copying callbacks
 (define callbacks-lib
   (let ()
-    (or
-     ;; search in all portaudio/lib collection dirs:
-     (collection-search
-      '(lib "portaudio/lib")
-      #:combine
-      (λ (_ path)
-        (ffi-lib (build-path path "callbacks")
-                 #:fail (λ () #f)))
-      #:break?
-      not-false?)
-     ;; also look in "standard locations". useful
-     ;; for people building executables.
-     (ffi-lib "callbacks"))))
+    (ffi-lib "librsoundcallbacks")))
 
 ;; STREAMING CALLBACK STRUCT
 

@@ -17,7 +17,8 @@
 
 
 (define linux-err-msg
-  "Note: on Linux/unix, you need to install the libportaudio library yourself. Underlying error message: ~a")
+  "Note: on Linux/unix, you need to install the libportaudio library\
+ yourself. Underlying error message: ~a")
 
 (define not-false? (λ (x) x))
 (define portaudio-version-strings '("2" "2.0.0" #f))
@@ -32,21 +33,8 @@
                     (exn-message exn))]
             [else
              (raise exn)]))])
-    (or
-     (collection-search
-      '(lib "portaudio/lib")
-      #:combine
-      (λ (_ path)
-        (or (ffi-lib (build-path path "libportaudio")
-                     portaudio-version-strings
-                     #:fail (λ () #f))
-            (ffi-lib (build-path path "portaudio")
-                     portaudio-version-strings
-                     #:fail (λ () #f))))
-      #:break?
-      not-false?)
-     (ffi-lib "libportaudio" portaudio-version-strings)
-     (ffi-lib "portaudio" portaudio-version-strings))))
+    (ffi-lib "libportaudio"
+             portaudio-version-strings)))
 
 ;; wrap a function to signal an error when an error code is returned.
 ;; (any ... -> pa-error) -> (any ... -> )
