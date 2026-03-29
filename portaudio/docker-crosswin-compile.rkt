@@ -7,7 +7,7 @@
 
 (require remote-shell/docker)
 
-(define name "zazzoo-1")
+(define name "portaudio-win-build")
 
 ;; success!
 #;(docker-create #:name name
@@ -38,9 +38,11 @@
 
 (define result-dll-name "libportaudio-2.dll")
 
-(docker-copy #:name name
+#;(docker-copy #:name name
              #:src (string-append
                     name ":"
                     "/home/racket/portaudio/my-build/lib/.libs/"
                     result-dll-name)
              #:dest (build-path "/tmp" result-dll-name))
+
+#;(docker-stop #:name name)
